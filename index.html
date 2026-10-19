@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0e1124">
-<title>OBS Bingo — 配信用ビンゴ番号表示</title>
-<meta name="description" content="OBSで使えるビンゴの番号表示。スマホをカメラにしてガラガラを映し、スマホから番号を入力できます。">
+<title>BINGO — ブラウザで使えるビンゴ番号表示</title>
+<meta name="description" content="ブラウザで開くだけで使えるビンゴの番号表示。画面上のガラガラで抽選、スマホのカメラで本物のガラガラを映す、スマホから番号入力。OBSにも対応。">
 <style>
   :root{--bg:#0e1124;--panel:#171c38;--panel2:#1d2347;--line:#2a3160;--accent:#ffcc33;--hit:#ff4d6d;--text:#fff;--dim:#9aa0d0;--soft:#cfd3f5;
     --B:#3fa7ff;--I:#ff5e7e;--N:#c9c9d6;--G:#3fd68a;--O:#ffb13f}
@@ -68,6 +68,16 @@
   details p,details ul{margin:0 0 12px}
   footer{padding:32px 0 48px;border-top:1px solid var(--line);color:var(--dim);font-size:13px;text-align:center}
   footer a{color:var(--soft)}
+  .cta{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin-top:28px}
+  .cta a{display:inline-block;text-decoration:none;font-weight:800;border-radius:14px;padding:14px 26px;font-size:18px}
+  .cta .main{background:var(--accent);color:var(--bg)}
+  .cta .sub{border:2px solid var(--line);color:var(--soft)}
+  .choice{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin:12px 0}
+  .choice > div{background:var(--panel);border-radius:14px;padding:18px 20px}
+  .choice h3{margin:0 0 6px;font-size:18px}
+  .choice .badge{display:inline-block;font-size:12px;font-weight:700;background:var(--accent);color:var(--bg);border-radius:6px;padding:1px 8px;margin-left:6px;vertical-align:middle}
+  .choice ol{margin:6px 0 0}
+  .choice p{margin:0}
   @media (max-width:520px){ header{padding-top:40px} td:first-child{white-space:normal;width:auto} }
 </style>
 </head>
@@ -75,88 +85,110 @@
 <div class="wrap">
   <header>
     <div class="logo"><span>B</span><span>I</span><span>N</span><span>G</span><span>O</span></div>
-    <p class="tag">OBSで使える、配信用のビンゴ番号表示。<br>スマホをカメラにしてガラガラを映し、そのままスマホから番号を入力できます。</p>
+    <p class="tag">ブラウザで開くだけで使える、ビンゴの番号表示。<br>テレビやプロジェクター、オンラインの画面共有、OBSでの配信にも。</p>
+    <div class="cta">
+      <a class="main" href="bingo.html">ビンゴ画面を開く</a>
+      <a class="sub" href="#how">使い方を見る</a>
+    </div>
     <div class="mock" aria-hidden="true">
       <div class="l">
         <div class="cur"><i>N</i><b>42</b></div>
         <div class="brd" id="mockBoard"></div>
       </div>
-      <div class="r">スマホのカメラ映像<br>（ガラガラ）</div>
+      <div class="r">画面上のガラガラ<br>または カメラの映像</div>
     </div>
-    <div class="cap"><span>← 出た番号・履歴・盤面</span><span>スマホのカメラ →</span></div>
+    <div class="cap"><span>← 出た番号・履歴・盤面</span><span>抽選 →</span></div>
   </header>
 
   <section>
     <div class="feat">
-      <div><b>インストール不要</b><p>OBSにURLを入れるだけ。スマホもブラウザで開くだけで、アプリはいりません。</p></div>
-      <div><b>スマホがカメラになる</b><p>QRコードを読むだけで、スマホの映像が画面右側に映ります。</p></div>
-      <div><b>スマホから番号入力</b><p>撮影しているスマホで番号をタップすれば、すぐ画面に表示されます。</p></div>
-      <div><b>カメラなしでもOK</b><p>「アプリ内抽選」に切り替えると、画面上のガラガラで抽選できます。</p></div>
-      <div><b>無料・自由に使える</b><p>MITライセンスで公開しています。改造や再配布も自由です。</p></div>
+      <div><b>開くだけ</b><p>インストールも登録もいりません。PCのブラウザで開けばすぐ使えます。</p></div>
+      <div><b>カメラなしで抽選</b><p>画面上のガラガラがランダムに番号を出します。道具は何もいりません。</p></div>
+      <div><b>本物のガラガラも</b><p>スマホやPCのカメラでガラガラを映し、出た番号を入力して表示できます。</p></div>
+      <div><b>スマホがリモコンに</b><p>QRを読むだけで、手元のスマホから抽選・番号入力・取り消しができます。</p></div>
+      <div><b>OBSにも対応</b><p>OBSのブラウザソースに入れれば、配信画面にもそのまま使えます。</p></div>
+      <div><b>無料・MITライセンス</b><p>著作権表示とライセンス文を残せば、改造・再配布・商用利用も自由です（無保証）。</p></div>
     </div>
   </section>
 
-  <section>
-    <h2><span class="n">1</span>OBSに追加する</h2>
-    <p>OBSに入れるURLはこれです。</p>
+  <section id="how">
+    <h2><span class="n">1</span>ビンゴ画面を開く</h2>
+    <p>PCのブラウザ（Chrome・Edge など）で開きます。</p>
     <div class="url">
-      <code id="obsUrl">https://anagoz.github.io/obs-bingo/bingo.html</code>
+      <code id="appUrl">https://anagoz.github.io/obs-bingo/bingo.html</code>
       <button id="copyBtn">コピー</button>
     </div>
-    <ol>
-      <li>OBSの「ソース」の <b>＋</b> →「<b>ブラウザ</b>」を選ぶ</li>
-      <li>「ローカルファイル」は<b>チェックしない</b>で、URLに上のアドレスを貼り付ける</li>
-      <li>幅と高さを配信の解像度と同じにする（例：<code>1920</code> × <code>1080</code>）</li>
-      <li>OKを押すと、左側に番号表示、右側にカメラ用の枠が出ます</li>
-    </ol>
-    <div class="note"><p>番号の入力や設定は、ブラウザソースを右クリック →「<b>対話</b>」を開いて操作します。</p></div>
+    <ul>
+      <li>左下の<b>全画面ボタン</b>か <kbd>F</kbd> キーで全画面にできます</li>
+      <li><b>会場で</b>：PCをテレビやプロジェクターにつないで、全画面で映します</li>
+      <li><b>オンラインで</b>：Zoom・Google Meet・Discord などで、このタブを画面共有します</li>
+    </ul>
+    <p class="small">出た番号はブラウザに保存されるので、閉じたり再読み込みしたりしても消えません。</p>
   </section>
 
   <section>
-    <h2><span class="n">2</span>スマホをカメラにする</h2>
-    <ol>
-      <li>「対話」画面で、左下の<b>歯車ボタン</b>（または <kbd>S</kbd> キー）を押して設定を開く</li>
-      <li>「<b>QRとコードを表示する</b>」を押し、スマホのカメラでQRコードを読む</li>
-      <li>スマホで開いたページの「<b>カメラ開始</b>」を押し、カメラの使用を許可する</li>
-    </ol>
-    <p>スマホの映像が右側の枠に映れば完了です。スマホを縦にしても横にしても、枠が自動で合います。</p>
+    <h2><span class="n">2</span>抽選のしかたを選ぶ</h2>
+    <p>左下の<b>歯車ボタン</b>（または <kbd>S</kbd> キー）で設定を開き、一番上の「右側の表示」で切り替えます。</p>
+    <div class="choice">
+      <div>
+        <h3>アプリ内抽選<span class="badge">はじめはこちら</span></h3>
+        <p>画面上のガラガラで抽選します。道具はいりません。</p>
+        <ol>
+          <li>右下の<b>サイコロボタン</b>か <kbd>Space</kbd> キーで回す</li>
+          <li>まだ出ていない番号からランダムに1つ出て、左に表示されます</li>
+        </ol>
+      </div>
+      <div>
+        <h3>カメラ</h3>
+        <p>本物のガラガラをカメラで映し、出た番号を入力します。</p>
+        <ol>
+          <li><b>スマホのカメラ</b>：設定の「QRとコードを表示する」を押してスマホで読み、「カメラ開始」</li>
+          <li><b>PCのカメラ</b>：設定の「このPCのカメラを使う」を押す</li>
+        </ol>
+      </div>
+    </div>
     <div class="note"><p>スマホとPCは<b>同じWi-Fi</b>につないでください。QRが読めないときは、スマホで <a href="camera.html">camera.html</a> を開いて、設定画面に出ている8文字のコードを入力します。</p></div>
   </section>
 
   <section>
     <h2><span class="n">3</span>番号を出す</h2>
     <h3>スマホから</h3>
-    <p>「<b>一覧</b>」（ビンゴカードと同じB〜Oの表）か「<b>テンキー</b>」で番号を選び、下の「<b>表示</b>」を押します。取り消し・リセットもスマホからできます。上の「自動 / 縦 / 横」ボタンで画面の配置を切り替えられます。</p>
-    <h3>PCから（「対話」画面で）</h3>
+    <p>QRを読んでつなぐと、スマホがリモコンになります。カメラを使わないときは、スマホの開始画面でカメラを「<b>使わない</b>」にして「接続する」を押します。</p>
+    <ul>
+      <li>アプリ内抽選のとき：「<b>🎲 抽選</b>」ボタンで回す</li>
+      <li>番号を入れるとき：「<b>一覧</b>」（B〜Oの表）か「<b>テンキー</b>」で選んで「<b>表示</b>」</li>
+      <li>「取り消し」「リセット」もスマホからできます。「自動 / 縦 / 横」で画面の配置を切り替えられます</li>
+    </ul>
+    <h3>PCから</h3>
     <table>
-      <tr><td><kbd>4</kbd><kbd>2</kbd> → <kbd>Enter</kbd></td><td>番号を表示</td></tr>
       <tr><td><kbd>Space</kbd></td><td>抽選（アプリ内抽選のとき）</td></tr>
+      <tr><td><kbd>4</kbd><kbd>2</kbd> → <kbd>Enter</kbd></td><td>番号を表示</td></tr>
       <tr><td><kbd>Backspace</kbd></td><td>直前の番号を取り消し</td></tr>
       <tr><td><kbd>Shift</kbd>+<kbd>R</kbd> を2回</td><td>全部リセット（左下の矢印ボタンを2回でもOK）</td></tr>
-      <tr><td><kbd>S</kbd></td><td>設定を開く／閉じる（左下の歯車ボタンでもOK）</td></tr>
+      <tr><td><kbd>S</kbd> / <kbd>F</kbd></td><td>設定 / 全画面</td></tr>
       <tr><td>盤面の数字をクリック</td><td>出した／消したを切り替え</td></tr>
     </table>
-    <p class="small">出た番号は保存されるので、OBSを再起動しても消えません。</p>
   </section>
 
   <section>
-    <h2><span class="n">★</span>カメラを使わずに抽選する</h2>
-    <p>ガラガラやカメラがなくても、画面上で抽選できます。</p>
+    <h2><span class="n">+</span>OBSで使う</h2>
+    <p>配信画面に入れたいときは、OBSの「ブラウザ」ソースとして追加します。</p>
     <ol>
-      <li>「対話」画面で設定（歯車ボタン）を開き、一番上の「右側の表示」を「<b>アプリ内抽選</b>」にする</li>
-      <li>右側に画面上のガラガラが出るので、右下の<b>サイコロボタン</b>か <kbd>Space</kbd> キーで回す（ガラガラ本体のクリックでもOK）</li>
-      <li>まだ出ていない番号からランダムに1つ出て、そのまま左に表示されます</li>
+      <li>OBSの「ソース」の <b>＋</b> →「<b>ブラウザ</b>」を選ぶ</li>
+      <li>「ローカルファイル」は<b>チェックしない</b>で、URLに上のアドレスを貼り付ける</li>
+      <li>幅と高さを配信の解像度と同じにする（例：<code>1920</code> × <code>1080</code>）</li>
+      <li>操作は、ブラウザソースを右クリック →「<b>対話</b>」を開いて行います</li>
     </ol>
-    <p>スマホから回すこともできます。スマホの開始画面でカメラを「<b>使わない</b>」にして「接続する」を押すと、カメラなしで「🎲 抽選」ボタンや番号入力が使えます。</p>
+    <p>OBSでは「カメラ」モードの枠の中が透明になるので、OBSの「映像キャプチャデバイス」をブラウザソースの<b>下</b>に置いて映すこともできます。設定画面に出る位置とサイズを、カメラの「変換の編集」に入れると枠にぴったり収まります。</p>
   </section>
 
   <section>
     <h2><span class="n">!</span>安全に使うために</h2>
-    <div class="note warn"><p>接続コードを知っている人は、あなたの配信に映像や番号を送れます。<b>QRとコードは配信に映らないよう、配信前に表示してつないでください。</b></p></div>
+    <div class="note warn"><p>接続コードを知っている人は、あなたのビンゴ画面に映像や番号を送れます。<b>QRとコードは、画面共有や配信に映らないように表示してください。</b></p></div>
     <ul>
       <li>QRとコードは普段は隠れていて、表示しても60秒後・設定を閉じたとき・スマホがつながったときに自動で隠れます</li>
       <li>「<b>ロック</b>」がオンだと、つながっているスマホ以外からの接続を断ります</li>
-      <li>コードが配信に映ってしまったら「<b>コードを変える</b>」を押してください</li>
+      <li>コードが映ってしまったら「<b>コードを変える</b>」を押してください</li>
       <li>映像は暗号化され、スマホとPCの間で直接やりとりされます</li>
     </ul>
   </section>
@@ -168,7 +200,7 @@
       <ul>
         <li>スマホとPCが同じWi-Fiにつながっているか確認してください（モバイル回線だとつながらないことがあります）</li>
         <li>設定画面とスマホに出ている状態の文字を確認してください</li>
-        <li>OBSのブラウザソースのプロパティで「現在のページのキャッシュを更新」を押すと直ることがあります</li>
+        <li>ビンゴ画面を再読み込みすると直ることがあります（OBSでは「現在のページのキャッシュを更新」）</li>
       </ul>
     </details>
     <details>
@@ -176,18 +208,18 @@
       <p>ロックが働いています。前につないだスマホのページを閉じるか、設定画面の「今のスマホを切断」を押してから、もう一度つないでください。</p>
     </details>
     <details>
-      <summary>画面の下が切れる・小さい</summary>
-      <p>ブラウザソースの幅と高さを、配信の解像度（OBSの設定 →「映像」の基本解像度）と同じにしてください。</p>
+      <summary>画面のまわりに余白がある</summary>
+      <p>ビンゴ画面は16:9で表示します。画面の比率が違うと上下や左右に余白が出ますが、全画面にすると目立たなくなります。</p>
     </details>
     <details>
-      <summary>スマホではなくOBSのカメラを使いたい</summary>
-      <p>OBSに「映像キャプチャデバイス」を追加し、ブラウザソースの<b>下</b>に置きます。設定画面の「カメラの解像度」に出る位置とサイズを、カメラの「変換の編集」に入れると枠にぴったり収まります。</p>
+      <summary>OBSで画面の下が切れる・小さい</summary>
+      <p>ブラウザソースの幅と高さを、配信の解像度（OBSの設定 →「映像」の基本解像度）と同じにしてください。</p>
     </details>
   </section>
 
   <footer>
-    <p>OBS Bingo · <a href="https://github.com/anagoZ/obs-bingo">GitHub</a> · <a href="https://github.com/anagoZ/obs-bingo/blob/main/LICENSE">MIT License</a></p>
-    <p>接続の仲介に <a href="https://peerjs.com/">PeerJS</a> の無料サーバーを使っています（動作は保証されません）。</p>
+    <p>BINGO · <a href="https://github.com/anagoZ/obs-bingo">GitHub</a> · <a href="https://github.com/anagoZ/obs-bingo/blob/main/LICENSE">MIT License</a></p>
+    <p>スマホとの接続の仲介に <a href="https://peerjs.com/">PeerJS</a> の無料サーバーを使っています（動作は保証されません）。</p>
   </footer>
 </div>
 <script>
@@ -196,9 +228,9 @@
   for(let i = 1; i <= 75; i++){ const s = document.createElement("span"); if(on.includes(i)) s.className = i === last ? "last" : "on"; mb.appendChild(s); }
   // URLコピー
   document.getElementById("copyBtn").onclick = async e => {
-    const btn = e.currentTarget, text = document.getElementById("obsUrl").textContent;
-    try{ await navigator.clipboard.writeText(text); btn.textContent = "コピーしました"; }
-    catch(_){ const r = document.createRange(); r.selectNodeContents(document.getElementById("obsUrl")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = "選択しました"; }
+    const btn = e.currentTarget, el = document.getElementById("appUrl");
+    try{ await navigator.clipboard.writeText(el.textContent); btn.textContent = "コピーしました"; }
+    catch(_){ const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = "選択しました"; }
     setTimeout(() => btn.textContent = "コピー", 1800);
   };
 </script>

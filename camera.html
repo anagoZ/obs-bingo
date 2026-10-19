@@ -458,7 +458,7 @@ function connect(){
     peer = new Peer();
     peer.on("open", () => connect());
     peer.on("error", err => {
-      if(err.type === "peer-unavailable") scheduleRetry("ビンゴ画面が見つかりません。コードとOBSを確認");
+      if(err.type === "peer-unavailable") scheduleRetry("ビンゴ画面が見つかりません。コードとビンゴ画面を確認");
       else if(["network","server-error","socket-error","socket-closed","disconnected"].includes(err.type)){
         try{ peer.destroy(); }catch(e){}
         scheduleRetry("サーバーにつながりません");
