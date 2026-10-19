@@ -14,9 +14,12 @@
   #stage{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0}
   #left{position:absolute;left:0;top:0;width:800px;height:1080px;box-sizing:border-box;
     padding:40px 44px;background:var(--bg);display:flex;flex-direction:column;gap:26px}
-  #right{position:absolute;left:800px;top:0;width:1120px;height:1080px;box-sizing:border-box;
-    border:6px solid var(--bg);overflow:hidden}
-  #right video{width:100%;height:100%;object-fit:cover;display:block}
+
+  /* 右側：枠の中だけ透明。枠の外は背景色で隠す */
+  #right{position:absolute;left:800px;top:0;width:1120px;height:1080px;overflow:hidden;
+    box-shadow:-4px 0 0 var(--bg)}
+  #frame{position:absolute;box-shadow:0 0 0 4000px var(--bg);outline:6px solid var(--line);overflow:hidden}
+  #frame video{width:100%;height:100%;object-fit:cover;display:block}
 
   .title{display:flex;justify-content:space-between;align-items:baseline}
   .title h1{margin:0;font-size:56px;letter-spacing:.18em;font-weight:900}
@@ -55,6 +58,23 @@
   #toast{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:14px 26px;border-radius:14px;
     background:rgba(0,0,0,.8);font-size:30px;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap}
   #toast.show{opacity:1}
+
+  /* 設定パネル（S キーで開閉） */
+  #settings{position:absolute;left:1000px;top:200px;width:720px;box-sizing:border-box;padding:36px 40px;
+    background:#1d2347;border:3px solid var(--accent);border-radius:24px;font-size:26px;display:none;z-index:10;
+    box-shadow:0 20px 60px rgba(0,0,0,.6)}
+  #settings.open{display:block}
+  #settings h2{margin:0 0 20px;font-size:34px}
+  #settings .presets{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:22px}
+  #settings button{font:inherit;font-size:22px;padding:10px 16px;border-radius:12px;border:2px solid var(--line);
+    background:var(--panel);color:#fff;cursor:pointer}
+  #settings button.sel{border-color:var(--accent);color:var(--accent)}
+  #settings .custom{display:flex;align-items:center;gap:12px;margin-bottom:24px}
+  #settings input{font:inherit;width:140px;padding:8px 12px;border-radius:10px;border:2px solid var(--line);
+    background:#0e1124;color:#fff;text-align:center}
+  #settings .info{background:#0e1124;border-radius:14px;padding:18px 22px;font-size:22px;line-height:1.7}
+  #settings .info b{color:var(--accent);font-variant-numeric:tabular-nums}
+  #settings .hint{margin-top:16px;font-size:18px;color:#9aa0d0}
 </style>
 </head>
 <body>
@@ -73,7 +93,22 @@
   <div id="board"></div>
   <div id="typing">入力中:<b id="buf"></b></div>
 </div>
-<div id="right"></div>
+<div id="right"><div id="frame"></div></div>
+
+<div id="settings">
+  <h2>カメラの解像度</h2>
+  <div class="presets" id="presets"></div>
+  <div class="custom">
+    <input id="resW" type="number" min="1"> × <input id="resH" type="number" min="1">
+    <button id="applyRes">適用</button>
+  </div>
+  <div class="info">
+    OBSでのカメラの置き場所（右クリック →「変換」→「変換の編集」）<br>
+    位置 X <b id="iX"></b> / Y <b id="iY"></b><br>
+    サイズ 幅 <b id="iW"></b> × 高さ <b id="iH"></b>
+  </div>
+  <div class="hint">S キーまたは Esc で閉じる（開いている間は配信にも映ります）</div>
+</div>
 </div>
 
 <script>
@@ -81,10 +116,17 @@ const MAX = 75;
 const LETTERS = ["B","I","N","G","O"];
 const COLORS = {B:"var(--B)",I:"var(--I)",N:"var(--N)",G:"var(--G)",O:"var(--O)"};
 const KEY = "obs-bingo-v1";
+const RES_KEY = "obs-bingo-res";
+const PRESETS = [
+  ["16:9 横",1920,1080],["4:3 横",1440,1080],["1:1",1080,1080],["3:4 縦",1080,1440],["9:16 縦",1080,1920]
+];
 let drawn = [];   // 出た順
 let buf = "";
 let resetArmed = 0;
+let res = {w:1920,h:1080};
+let scale = 1;
 
+const $ = id => document.getElementById(id);
 const letterOf = n => LETTERS[Math.floor((n-1)/15)];
 
 // ---- 保存（OBSのリロードでも消えないように） ----
@@ -92,10 +134,16 @@ function save(){ try{ localStorage.setItem(KEY, JSON.stringify(drawn)); }catch(e
 function load(){
   try{ const v = JSON.parse(localStorage.getItem(KEY)||"[]");
        if(Array.isArray(v)) drawn = v.filter(n=>Number.isInteger(n)&&n>=1&&n<=MAX); }catch(e){}
+  try{ const r = JSON.parse(localStorage.getItem(RES_KEY)||"null");
+       if(r && r.w>0 && r.h>0) res = {w:+r.w,h:+r.h}; }catch(e){}
+  // URLで指定もできる： bingo.html?res=1280x720
+  const q = new URLSearchParams(location.search).get("res");
+  const m = q && q.match(/^(\d+)[x×:](\d+)$/i);
+  if(m && +m[1]>0 && +m[2]>0) res = {w:+m[1],h:+m[2]};
 }
 
 // ---- 盤面生成 ----
-const board = document.getElementById("board");
+const board = $("board");
 LETTERS.forEach((L,r)=>{
   const lb = document.createElement("div");
   lb.className="rowlbl"; lb.textContent=L; lb.style.background=COLORS[L];
@@ -110,13 +158,13 @@ LETTERS.forEach((L,r)=>{
 
 function render(animate){
   const last = drawn[drawn.length-1];
-  document.getElementById("cnt").textContent = drawn.length;
+  $("cnt").textContent = drawn.length;
   for(let n=1;n<=MAX;n++){
-    const el=document.getElementById("c"+n);
+    const el=$("c"+n);
     el.classList.toggle("on", drawn.includes(n));
     el.classList.toggle("last", n===last);
   }
-  const ln=document.getElementById("curLetter"), cn=document.getElementById("curNum");
+  const ln=$("curLetter"), cn=$("curNum");
   if(last){
     const L=letterOf(last);
     ln.textContent=L; ln.style.background=COLORS[L];
@@ -126,7 +174,7 @@ function render(animate){
     cn.textContent="READY"; cn.classList.add("empty");
   }
   if(animate){ [ln,cn].forEach(e=>{e.classList.remove("pop"); void e.offsetWidth; e.classList.add("pop");}); }
-  const h=document.getElementById("history");
+  const h=$("history");
   h.querySelectorAll(".h").forEach(e=>e.remove());
   drawn.slice(0,-1).slice(-8).reverse().forEach(n=>{
     const d=document.createElement("div"); d.className="h"; d.textContent=n;
@@ -135,7 +183,7 @@ function render(animate){
 }
 
 function toast(msg){
-  const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show");
+  const t=$("toast"); t.textContent=msg; t.classList.add("show");
   clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show"),1400);
 }
 function addNum(n){
@@ -145,15 +193,57 @@ function addNum(n){
 }
 function removeNum(n){ drawn=drawn.filter(x=>x!==n); save(); render(false); }
 function showBuf(){
-  document.getElementById("buf").textContent=buf;
-  document.getElementById("typing").classList.toggle("show", buf.length>0);
+  $("buf").textContent=buf;
+  $("typing").classList.toggle("show", buf.length>0);
+}
+
+// ---- カメラ枠：解像度の比率に合わせて右側に配置 ----
+const RIGHT_X = 800, RIGHT_W = 1120, RIGHT_H = 1080, MARGIN = 30;
+let frameBox = {x:0,y:0,w:0,h:0};
+function layoutFrame(){
+  const a = res.w/res.h, aw = RIGHT_W-MARGIN*2, ah = RIGHT_H-MARGIN*2;
+  const w = Math.min(aw, ah*a), h = w/a;
+  const x = (RIGHT_W-w)/2, y = (RIGHT_H-h)/2;
+  frameBox = {x:RIGHT_X+x, y, w, h};
+  Object.assign($("frame").style,{left:x+"px",top:y+"px",width:w+"px",height:h+"px"});
+  updateInfo();
+}
+function updateInfo(){
+  const r = v => Math.round(v*scale);
+  $("iX").textContent=r(frameBox.x); $("iY").textContent=r(frameBox.y);
+  $("iW").textContent=r(frameBox.w); $("iH").textContent=r(frameBox.h);
+  $("resW").value=res.w; $("resH").value=res.h;
+  document.querySelectorAll("#presets button").forEach(b=>
+    b.classList.toggle("sel", +b.dataset.w*res.h === +b.dataset.h*res.w));
+}
+function setRes(w,h){
+  if(!(w>0&&h>0)){ toast("幅と高さを入れてね"); return; }
+  res={w,h}; try{ localStorage.setItem(RES_KEY, JSON.stringify(res)); }catch(e){}
+  layoutFrame();
+}
+PRESETS.forEach(([label,w,h])=>{
+  const b=document.createElement("button"); b.textContent=`${label}（${w}×${h}）`;
+  b.dataset.w=w; b.dataset.h=h; b.onclick=()=>setRes(w,h);
+  $("presets").appendChild(b);
+});
+$("applyRes").onclick=()=>setRes(parseInt($("resW").value,10), parseInt($("resH").value,10));
+function toggleSettings(force){
+  const s=$("settings"), open = force ?? !s.classList.contains("open");
+  s.classList.toggle("open", open);
+  if(!open) document.activeElement?.blur();
 }
 
 // ---- キー操作 ----
 document.addEventListener("keydown",e=>{
+  if(e.target.tagName==="INPUT"){
+    if(e.key==="Enter") $("applyRes").click();
+    if(e.key==="Escape") toggleSettings(false);
+    return;
+  }
+  if(e.key==="s"||e.key==="S"){ if(!e.shiftKey){ toggleSettings(); return; } }
   if(/^[0-9]$/.test(e.key)){ if(buf.length<2){ buf+=e.key; showBuf(); } return; }
   if(e.key==="Enter"){ if(buf){ addNum(parseInt(buf,10)); buf=""; showBuf(); } return; }
-  if(e.key==="Escape"){ buf=""; showBuf(); return; }
+  if(e.key==="Escape"){ if($("settings").classList.contains("open")) toggleSettings(false); buf=""; showBuf(); return; }
   if(e.key==="Backspace"){
     e.preventDefault();
     if(buf){ buf=buf.slice(0,-1); showBuf(); }
@@ -167,22 +257,23 @@ document.addEventListener("keydown",e=>{
   }
 });
 
-// ---- ブラウザで試すとき用：?cam=1 で右側にカメラを表示 ----
+// ---- ブラウザで試すとき用：?cam=1 で枠の中にPCのカメラを表示 ----
 if(new URLSearchParams(location.search).has("cam") && navigator.mediaDevices){
   navigator.mediaDevices.getUserMedia({video:{width:1920,height:1080},audio:false}).then(s=>{
     const v=document.createElement("video"); v.autoplay=true; v.muted=true; v.playsInline=true; v.srcObject=s;
-    document.getElementById("right").appendChild(v);
+    $("frame").appendChild(v);
   }).catch(()=>toast("カメラを開けませんでした"));
 }
 
 // ---- どの画面サイズでも1920×1080の比率で全体を収める ----
 function fit(){
-  const s=Math.min(innerWidth/1920, innerHeight/1080);
-  document.getElementById("stage").style.transform=`scale(${s})`;
+  scale=Math.min(innerWidth/1920, innerHeight/1080);
+  $("stage").style.transform=`scale(${scale})`;
+  updateInfo();
 }
-addEventListener("resize",fit); fit();
+addEventListener("resize",fit);
 
-load(); render(false);
+load(); layoutFrame(); fit(); render(false);
 </script>
 </body>
 </html>
