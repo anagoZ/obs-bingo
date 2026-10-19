@@ -151,6 +151,43 @@
   #revealNote{font-size:17px;color:var(--hit);min-height:24px;margin-top:6px}
   .phone .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
   .phone .btns button{font-size:18px !important}
+  /* ===== スマホ縦向き用の配置（body.portrait）：1080×1920 の縦長画面 ===== */
+  body.portrait #stage{width:1080px;height:1920px}
+  body.portrait #left{width:1080px;height:1090px;padding:44px 44px 0;gap:28px}
+  body.portrait .title h1{font-size:72px}
+  body.portrait .count{font-size:38px} body.portrait .count b{font-size:58px}
+  body.portrait #current{height:390px;flex:none}
+  body.portrait #history{height:86px} body.portrait #history .lbl{font-size:28px;width:84px}
+  body.portrait #history .h{width:80px;height:80px;font-size:36px}
+  body.portrait #board{grid-template-columns:56px repeat(15,1fr);gap:6px;flex:none}
+  body.portrait #board .cell{height:64px;font-size:28px}
+  body.portrait #board .rowlbl{font-size:36px}
+  body.portrait #tools{display:none}
+  body.portrait #typing{right:44px;bottom:auto;top:44px;font-size:30px}
+  body.portrait #right{left:0;top:1090px;width:1080px;height:830px;box-shadow:none}
+  body.portrait #drum{inset:auto;top:0;left:50%;height:calc(100% - 220px);width:auto;transform:translateX(-50%)}
+  body.portrait #btnDraw{right:40px;bottom:30px;width:160px;height:160px;border-width:5px}
+  body.portrait #btnDraw svg{width:84px;height:84px}
+  body.portrait #noCam b{font-size:52px} body.portrait #noCam span{font-size:32px}
+  /* 縦向きのボタン列（下中央・大きめ） */
+  #ptools{display:none;position:absolute;left:40px;bottom:50px;gap:24px}
+  body.portrait #ptools{display:flex}
+  #ptools button{width:120px;height:120px;border-radius:50%;border:4px solid var(--line);background:var(--panel);color:#cfd3f5;
+    display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer}
+  #ptools button svg{width:56px;height:56px}
+  #ptools button.armed{color:var(--hit);border-color:var(--hit)}
+  /* 設定画面も縦長・大きめの文字に */
+  body.portrait #settings{left:30px;width:1020px;max-height:1860px;font-size:34px;padding:40px 36px}
+  body.portrait #settings .cols{grid-template-columns:1fr;gap:30px}
+  body.portrait #settings .cols > section + section{border-left:none;padding-left:0;border-top:2px solid var(--line);padding-top:30px}
+  body.portrait .modeRow{flex-wrap:wrap;padding-right:0;padding-top:90px}
+  body.portrait #settings h2{font-size:40px}
+  body.portrait #settings button{font-size:30px;padding:14px 20px}
+  body.portrait .phone{flex-direction:column;align-items:flex-start}
+  body.portrait .phone .code{font-size:30px} body.portrait .phone label{font-size:30px}
+  body.portrait #settings .hint{font-size:26px}
+  body.portrait .modeRow .desc{font-size:26px}
+
   /* スマホで開いたときの案内（画面の拡大縮小の外に置く） */
   #mobileGate{position:fixed;inset:0;z-index:100;background:var(--bg);display:none;overflow-y:auto;
     padding:max(24px,env(safe-area-inset-top)) 20px max(24px,env(safe-area-inset-bottom))}
@@ -173,7 +210,7 @@
     <p id="mgTitle"><b>この画面はPCやテレビに映す用です。</b><br>スマホでは、ビンゴ画面のリモコンやカメラとして使えます。</p>
     <a class="go" id="mgRemote" href="camera.html">スマホをリモコンにする</a>
     <button class="stay" id="mgStay">このまま開く</button>
-    <small>「このまま開く」場合は、スマホを横向きにすると見やすくなります。<br>リモコンにするには、PCでビンゴ画面を開き、設定のQRコードをスマホで読むのがかんたんです。</small>
+    <small>「このまま開く」と、縦向きではスマホ用の縦長の画面、横向きではPCと同じ画面で表示します。<br>リモコンにするには、PCでビンゴ画面を開き、設定のQRコードをスマホで読むのがかんたんです。</small>
   </div>
 </div>
 <div id="vp"><div id="stage">
@@ -209,6 +246,11 @@
       <span>左下の歯車ボタンからスマホやPCのカメラをつなぐか、<br>「アプリ内抽選」に切り替えてください</span>
     </div>
   </div><canvas id="drum" width="1120" height="1080"></canvas>
+  <div id="ptools">
+    <button id="pSettings" title="設定" aria-label="設定"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+    <button id="pUndo" title="直前を取り消し" aria-label="直前を取り消し"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
+    <button id="pReset" title="リセット" aria-label="リセット"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 9 9 9"/></svg></button>
+  </div>
   <button id="btnDraw" title="抽選（Space）">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="16" cy="8" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="8" cy="16" r="1.4" fill="currentColor"/><circle cx="16" cy="16" r="1.4" fill="currentColor"/></svg>
   </button>
@@ -360,9 +402,12 @@ function showBuf(){
 }
 
 // ---- カメラ枠：解像度の比率に合わせて右側に配置 ----
-const RIGHT_X = 800, RIGHT_W = 1120, RIGHT_H = 1080, MARGIN = 30;
+const MARGIN = 30;
 let frameBox = {x:0,y:0,w:0,h:0};
+let portraitRightH = 830;   // 縦向きの下半分の高さ（画面の縦横比で変わる）。下の220pxはボタン用
+function rightArea(){ return document.body.classList.contains("portrait") ? {X:0, W:1080, H:portraitRightH - 220} : {X:800, W:1120, H:1080}; }
 function layoutFrame(){
+  const {X:RIGHT_X, W:RIGHT_W, H:RIGHT_H} = rightArea();
   const a = res.w/res.h, aw = RIGHT_W-MARGIN*2, ah = RIGHT_H-MARGIN*2;
   const w = Math.min(aw, ah*a), h = w/a;
   const x = (RIGHT_W-w)/2, y = (RIGHT_H-h)/2;
@@ -825,20 +870,42 @@ $("btnDraw").onclick = e => { e.currentTarget.blur(); drawRandom(); };
 function initMode(){ let m = null; try{ m = localStorage.getItem(MODE_KEY); }catch(e){} setMode(m || (IN_OBS ? "camera" : "app")); }  // 初めてブラウザで開いたときはカメラ不要の「アプリ内抽選」から
 
 // ---- どの画面サイズでも1920×1080の比率で全体を収める ----
+// スマホを縦に持っているときは縦長の配置（1080×1920）、それ以外は横長（1920×1080）
+const IS_PHONE = !IN_OBS && matchMedia("(pointer:coarse)").matches && Math.min(screen.width, screen.height) < 600;
 function fit(){
-  scale=Math.min(innerWidth/1920, innerHeight/1080);
+  const portrait = IS_PHONE && innerHeight > innerWidth;
+  // 縦向きは幅1080に合わせ、高さはスマホの縦横比いっぱいまで使う（余白を作らない）
+  const SW = portrait ? 1080 : 1920, SH = portrait ? Math.max(1700, Math.round(1080 * innerHeight / innerWidth)) : 1080;
+  const rh = SH - 1090;
+  if(document.body.classList.contains("portrait") !== portrait || (portrait && rh !== portraitRightH)){
+    document.body.classList.toggle("portrait", portrait);
+    portraitRightH = rh;
+    $("stage").style.height = portrait ? SH + "px" : "";
+    $("right").style.height = portrait ? rh + "px" : "";
+    layoutFrame();
+  }
+  scale=Math.min(innerWidth/SW, innerHeight/SH);
   // ブラウザでは画面の真ん中に置く（OBSでは左上基準のまま。カメラ位置の数値がずれないように）
-  const ox = IN_OBS ? 0 : (innerWidth - 1920*scale)/2, oy = IN_OBS ? 0 : (innerHeight - 1080*scale)/2;
+  const ox = IN_OBS ? 0 : (innerWidth - SW*scale)/2, oy = IN_OBS ? 0 : (innerHeight - SH*scale)/2;
   $("stage").style.transform=`translate(${ox}px,${oy}px) scale(${scale})`;
   updateInfo();
 }
 addEventListener("resize",fit);
 
+$("pSettings").onclick = e => { e.currentTarget.blur(); toggleSettings(); };
+$("pUndo").onclick = e => { e.currentTarget.blur(); if(!drawn.length){ toast("取り消す番号がありません"); return; } const n = drawn.pop(); save(); render(false); toast(`${n} を取り消しました`); };
+$("pReset").onclick = e => {
+  const b = e.currentTarget; b.blur();
+  const now = Date.now();
+  if(now - resetArmed < 2500){ resetArmed = 0; b.classList.remove("armed"); drawn = []; save(); render(false); toast("リセットしました"); }
+  else{ resetArmed = now; b.classList.add("armed"); toast("もう一度押すとリセット"); setTimeout(() => b.classList.remove("armed"), 2500); }
+};
+
 load(); layoutFrame(); fit(); render(false); initCam(); initMode();
 
 // ---- スマホで開いたときは、最初に案内を出す（OBS・タブレット・PCでは出さない） ----
 (function(){
-  const phone = !IN_OBS && matchMedia("(pointer:coarse)").matches && Math.min(screen.width, screen.height) < 600;
+  const phone = IS_PHONE;
   let dismissed = false; try{ dismissed = sessionStorage.getItem("obs-bingo-mobile-ok") === "1"; }catch(e){}
   if(!phone || dismissed) return;
   $("mgRemote").href = location.protocol === "https:" ? new URL("camera.html", location.href).href : CAM_PAGE;
