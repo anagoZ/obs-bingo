@@ -410,7 +410,8 @@ function acceptRemote(conn){
 
 function newCamCode(){ return String(Math.floor(100000 + Math.random()*900000)); }
 function camPageUrl(){
-  const base = /^https?:$/.test(location.protocol) ? new URL("camera.html", location.href).href : CAM_PAGE;
+  // スマホでカメラを使うには https が必須。OBSのローカルファイル（http://absolute/...）などでは公開ページを使う
+  const base = location.protocol === "https:" ? new URL("camera.html", location.href).href : CAM_PAGE;
   return base + "?code=" + camCode;
 }
 function setCam(text, state){ $("camStatus").textContent = text; $("camDot").className = state || ""; }
