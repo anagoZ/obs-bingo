@@ -28,8 +28,8 @@
   .logo span:nth-child(4){color:var(--G)} .logo span:nth-child(5){color:var(--O)}
   .logo small{display:block;font-size:14px;letter-spacing:.1em;color:var(--dim);margin-top:4px}
   label{font-size:13px;color:var(--dim);display:block;margin-bottom:6px}
-  #code{width:100%;font:inherit;font-size:34px;font-weight:800;padding:12px;border-radius:14px;border:2px solid var(--line);
-    background:#0a0d1c;color:#fff;letter-spacing:.3em;text-align:center}
+  #code{width:100%;font:inherit;font-size:30px;font-weight:800;padding:12px;border-radius:14px;border:2px solid var(--line);
+    background:#0a0d1c;color:#fff;letter-spacing:.15em;text-align:center;font-family:ui-monospace,Menlo,Consolas,monospace}
   .seg{display:flex;background:#0a0d1c;border:2px solid var(--line);border-radius:14px;padding:4px;gap:4px}
   .seg button{flex:1;border:none;background:transparent;color:var(--dim);font-size:15px;padding:10px 4px;border-radius:10px}
   .seg button.on{background:var(--panel2);color:#fff;box-shadow:inset 0 0 0 2px var(--accent)}
@@ -140,8 +140,8 @@
   <div class="setup-inner">
     <div class="logo"><span>B</span><span>I</span><span>N</span><span>G</span><span>O</span><small>カメラ＆入力</small></div>
     <div>
-      <label>接続コード（ビンゴ画面の設定に出ている6桁）</label>
-      <input id="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000" autocomplete="off">
+      <label>接続コード（ビンゴ画面の設定に出ている8文字）</label>
+      <input id="code" maxlength="9" placeholder="xxxx-xxxx" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
     </div>
     <div>
       <label>カメラ</label>
@@ -249,8 +249,15 @@ const savePref = () => { try{ localStorage.setItem(PREF_KEY, JSON.stringify(pref
 
 // ---- 開始画面 ----
 const qCode = new URLSearchParams(location.search).get("code");
-try{ $("code").value = (qCode && /^\d{6}$/.test(qCode)) ? qCode : (localStorage.getItem(CODE_KEY) || ""); }catch(e){ if(qCode) $("code").value = qCode; }
-$("code").addEventListener("input", e => { e.target.value = e.target.value.replace(/\D/g,"").slice(0,6); });
+// 接続コード：英小文字＋数字 8文字（xxxx-xxxx）。大文字・空白・ハイフンの有無は気にせず入れられる
+const CODE_RE = /^[a-hjkmnp-z2-9]{4}-[a-hjkmnp-z2-9]{4}$/;
+function normCode(v){
+  const s = String(v || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 8);
+  return s.length > 4 ? s.slice(0,4) + "-" + s.slice(4) : s;
+}
+let savedCode = ""; try{ savedCode = localStorage.getItem(CODE_KEY) || ""; }catch(e){}
+$("code").value = CODE_RE.test(normCode(qCode)) ? normCode(qCode) : (CODE_RE.test(savedCode) ? savedCode : "");
+$("code").addEventListener("input", e => { e.target.value = normCode(e.target.value); });
 
 function bindSeg(ids, key, onChange){
   const sync = () => ids.forEach(id => $(id).querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.v === pref[key])));
@@ -463,9 +470,10 @@ document.addEventListener("visibilitychange", () => { if(document.visibilityStat
 function showScreen(id){ ["setup","run"].forEach(s => $(s).classList.toggle("show", s === id)); }
 
 async function start(){
-  const code = $("code").value, m = $("setupMsg");
+  const code = normCode($("code").value), m = $("setupMsg");
+  $("code").value = code;
   m.textContent = "";
-  if(!/^\d{6}$/.test(code)){ m.textContent = "6桁の接続コードを入れてください"; $("code").focus(); return; }
+  if(!CODE_RE.test(code)){ m.textContent = "8文字の接続コードを入れてください（例：ab3k-9xqz）"; $("code").focus(); return; }
   if(!window.Peer){ m.textContent = "接続ライブラリを読み込めませんでした。ページを再読み込みしてください"; return; }
   if(!navigator.mediaDevices?.getUserMedia){ m.textContent = "このブラウザではカメラが使えません（https で開いているか確認）"; return; }
   try{ localStorage.setItem(CODE_KEY, code); }catch(e){}

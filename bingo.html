@@ -94,7 +94,7 @@
   #qr{width:200px;height:200px;background:#fff;padding:10px;border-radius:12px;flex:none}
   #qr img,#qr canvas{width:200px !important;height:200px !important}
   .phone .code{font-size:22px;color:#cfd3f5}
-  .phone .code b{display:block;font-size:64px;letter-spacing:.12em;color:var(--accent);font-variant-numeric:tabular-nums;line-height:1.2}
+  .phone .code b{display:block;font-size:54px;letter-spacing:.08em;white-space:nowrap;color:var(--accent);font-variant-numeric:tabular-nums;line-height:1.2}
   .phone .st{display:flex;align-items:center;gap:10px;font-size:22px;margin:10px 0 14px}
   #camDot{width:16px;height:16px;border-radius:50%;background:var(--dim)}
   #camDot.ok{background:#3fd68a} #camDot.wait{background:var(--accent)} #camDot.ng{background:var(--hit)}
@@ -149,7 +149,7 @@
       <button id="revealBtn">QRとコードを<br>表示する</button>
     </div>
     <div>
-      <div class="code">スマホでQRを読むか、カメラ送信ページにこのコードを入力<b id="camCode">●●●●●●</b></div>
+      <div class="code">スマホでQRを読むか、カメラ送信ページにこのコードを入力<b id="camCode">●●●●-●●●●</b></div>
       <div id="revealNote"></div>
       <div class="st"><div id="camDot"></div><div id="camStatus">準備中…</div></div>
       <label><input type="checkbox" id="lockChk" checked> つながったスマホ以外は受け付けない（ロック）</label>
@@ -408,7 +408,14 @@ function acceptRemote(conn){
   conn.on("close", drop); conn.on("error", drop);
 }
 
-function newCamCode(){ return String(Math.floor(100000 + Math.random()*900000)); }
+// 接続コード：見間違えやすい文字（0,o,1,l,i）を除いた英小文字＋数字 8文字（約8,500億通り）
+const CODE_CHARS = "abcdefghjkmnpqrstuvwxyz23456789";
+const CODE_RE = /^[a-hjkmnp-z2-9]{4}-[a-hjkmnp-z2-9]{4}$/;
+function newCamCode(){
+  const r = new Uint32Array(8); crypto.getRandomValues(r);
+  const s = Array.from(r, x => CODE_CHARS[x % CODE_CHARS.length]).join("");
+  return s.slice(0,4) + "-" + s.slice(4);
+}
 function camPageUrl(){
   // スマホでカメラを使うには https が必須。OBSのローカルファイル（http://absolute/...）などでは公開ページを使う
   const base = location.protocol === "https:" ? new URL("camera.html", location.href).href : CAM_PAGE;
@@ -417,7 +424,7 @@ function camPageUrl(){
 function setCam(text, state){ $("camStatus").textContent = text; $("camDot").className = state || ""; }
 function drawQr(){
   $("qr").innerHTML = "";
-  if(!revealed){ $("camCode").textContent = "●●●●●●"; $("camLink").textContent = ""; return; }
+  if(!revealed){ $("camCode").textContent = "●●●●-●●●●"; $("camLink").textContent = ""; return; }
   $("camCode").textContent = camCode;
   $("camLink").textContent = camPageUrl();
   if(window.QRCode) new QRCode($("qr"), {text: camPageUrl(), width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M});
@@ -476,7 +483,7 @@ function startPeer(){
 }
 function initCam(){
   try{ camCode = localStorage.getItem(CAM_CODE_KEY) || ""; }catch(e){}
-  if(!/^\d{6}$/.test(camCode)){ camCode = newCamCode(); try{ localStorage.setItem(CAM_CODE_KEY, camCode); }catch(e){} }
+  if(!CODE_RE.test(camCode)){ camCode = newCamCode(); try{ localStorage.setItem(CAM_CODE_KEY, camCode); }catch(e){} }
   try{ const a = localStorage.getItem(AUTOFIT_KEY); if(a !== null) $("autoFit").checked = a === "1"; }catch(e){}
   $("autoFit").onchange = e => { try{ localStorage.setItem(AUTOFIT_KEY, e.target.checked ? "1" : "0"); }catch(_){}
     const v = $("frame").querySelector("video"); if(e.target.checked && v?.videoWidth) setRes(v.videoWidth, v.videoHeight); };
