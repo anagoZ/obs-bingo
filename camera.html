@@ -93,16 +93,34 @@
   #msg.show{opacity:1}
   #run.off #inputArea, #run.off .send, #run.off .now button{opacity:.35;pointer-events:none}
 
-  /* 横向き：左にプレビュー、右に入力 */
-  @media (orientation:landscape) and (max-height:600px){
-    #run.show{grid-template-columns:44% 56%;grid-template-rows:auto 1fr auto}
-    .bar{grid-column:1 / 3}
-    #topArea{grid-row:2 / 4;grid-column:1;min-height:0}
-    #preview{flex:1;height:auto}
-    #inputArea{grid-row:2;grid-column:2}
-    .send{grid-row:3;grid-column:2}
-    #grid .c{height:30px;font-size:15px}
-  }
+  /* 配置切替ボタン */
+  #layoutBtn{width:auto;padding:0 10px;font-size:13px;gap:4px}
+
+  /* ===== 横向きレイアウト（body.land）：左に入力、右にプレビューと送信 ===== */
+  body.land #run.show{grid-template-columns:minmax(0,1fr) clamp(220px,32vw,320px);grid-template-rows:auto minmax(0,1fr) auto}
+  body.land .bar{grid-column:1 / 3;padding:4px 10px}
+  body.land .bar .icon{width:34px;height:34px}
+  body.land #inputArea{grid-row:2 / 4;grid-column:1;padding-bottom:8px}
+  body.land .tabs{padding:6px 10px 0}
+  body.land .tabs button{padding:5px;font-size:13px}
+  body.land .pane{margin:0 10px}
+  body.land #topArea{grid-row:2;grid-column:2;min-height:0;padding:8px 10px 0 0}
+  body.land #preview{flex:1;height:auto;min-height:0;border-radius:10px;overflow:hidden}
+  body.land .now{flex-wrap:wrap;padding:8px 0;gap:8px;border-bottom:none}
+  body.land .now .sp{display:none}
+  body.land .now .ball{min-width:0;flex:1 1 50%;height:40px;font-size:22px;white-space:nowrap}
+  body.land .now .count{flex:0 0 auto;white-space:nowrap}
+  body.land .now button{flex:1 1 40%;padding:8px 4px;white-space:nowrap}
+  body.land .send{grid-row:3;grid-column:2;flex-direction:column;gap:8px;padding:0 10px 10px 0}
+  body.land #entry{min-height:52px;font-size:30px;flex:none}
+  body.land #send{width:100%;max-width:none;height:60px;flex:none}
+  body.land #run.nopreview #topArea{grid-row:2}
+  /* 一覧はビンゴ画面と同じ横長：B〜Oが行、1〜15が列（スクロールなしで全部見える） */
+  body.land #grid{grid-template-columns:30px repeat(15,minmax(0,1fr));grid-template-rows:repeat(5,minmax(0,1fr));overflow:hidden;gap:3px}
+  body.land #grid .hd{position:static;display:flex;align-items:center;justify-content:center;padding:0;font-size:16px}
+  body.land #grid .c{height:auto;font-size:clamp(12px,2.1vw,17px);border-radius:6px}
+  body.land .keys{grid-template-columns:repeat(4,1fr)}
+  body.land .keys button{font-size:26px;min-height:0}
 
   /* 設定シート */
   #sheet{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:flex-end;z-index:20}
@@ -147,6 +165,10 @@
 <div id="run" class="screen off">
   <div class="bar">
     <div id="dot"></div><div id="statusText">接続中…</div>
+    <button class="icon" id="layoutBtn" title="画面の配置">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M2 9v6M22 9v6"/></svg>
+      <span id="layoutLabel">自動</span>
+    </button>
     <button class="icon on" id="togglePreview" title="プレビュー">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
     </button>
@@ -248,13 +270,14 @@ let msgTimer;
 function flash(text){ const m = $("msg"); m.textContent = text; m.classList.add("show"); clearTimeout(msgTimer); msgTimer = setTimeout(()=>m.classList.remove("show"), 2200); }
 function setOnline(on){ $("run").classList.toggle("off", !on); }
 
-// ---- 一覧（B〜Oの縦列） ----
+// ---- 一覧（縦向き：B〜Oが列 / 横向き：B〜Oが行） ----
 const grid = $("grid");
-LETTERS.forEach(L => { const h = document.createElement("div"); h.className = "hd"; h.textContent = L; h.style.background = COLORS[L]; grid.appendChild(h); });
+LETTERS.forEach((L,c) => { const h = document.createElement("div"); h.className = "hd"; h.textContent = L; h.style.background = COLORS[L];
+  h.dataset.r = 0; h.dataset.c = c; grid.appendChild(h); });
 for(let r = 1; r <= 15; r++){
   for(let c = 0; c < 5; c++){
     const n = c*15 + r, b = document.createElement("button");
-    b.className = "c"; b.id = "g" + n; b.textContent = n;
+    b.className = "c"; b.id = "g" + n; b.textContent = n; b.dataset.r = r; b.dataset.c = c;
     b.onclick = () => {
       if(drawn.includes(n)){ flash(`${letterOf(n)} ${n} はもう出ています`); return; }
       entry = entry === String(n) ? "" : String(n);   // もう一度タップで選択解除
@@ -325,6 +348,28 @@ $("reset").onclick = () => {
 function applyPreview(){ $("run").classList.toggle("nopreview", !pref.preview); $("togglePreview").classList.toggle("on", pref.preview); }
 $("togglePreview").onclick = () => { pref.preview = !pref.preview; savePref(); applyPreview(); };
 applyPreview();
+
+// ---- 画面の配置：自動 / 縦 / 横 ----
+const LAYOUTS = ["auto","portrait","landscape"], LAYOUT_LABEL = {auto:"自動", portrait:"縦", landscape:"横"};
+if(!LAYOUTS.includes(pref.layout)) pref.layout = "auto";
+function applyLayout(){
+  const land = pref.layout === "landscape" || (pref.layout === "auto" && innerWidth > innerHeight);
+  document.body.classList.toggle("land", land);
+  $("layoutLabel").textContent = LAYOUT_LABEL[pref.layout];
+  $("layoutBtn").classList.toggle("on", pref.layout !== "auto");
+  // 一覧の並び：縦はカードと同じ（列=B〜O）、横はビンゴ画面と同じ（行=B〜O）
+  grid.querySelectorAll("[data-r]").forEach(el => {
+    const r = +el.dataset.r, c = +el.dataset.c;
+    el.style.gridRow = land ? (c + 1) : (r + 1);
+    el.style.gridColumn = land ? (r + 1) : (c + 1);
+  });
+}
+$("layoutBtn").onclick = () => {
+  pref.layout = LAYOUTS[(LAYOUTS.indexOf(pref.layout) + 1) % LAYOUTS.length]; savePref(); applyLayout();
+  flash(`画面の配置：${LAYOUT_LABEL[pref.layout]}${pref.layout === "auto" ? "（スマホの向きに合わせる）" : ""}`);
+};
+addEventListener("resize", applyLayout);
+applyLayout();
 $("openSheet").onclick = () => { $("sheetCode").textContent = $("code").value; $("sheet").classList.add("show"); };
 $("closeSheet").onclick = () => $("sheet").classList.remove("show");
 $("sheet").onclick = e => { if(e.target.id === "sheet") $("sheet").classList.remove("show"); };
