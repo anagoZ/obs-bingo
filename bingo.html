@@ -27,9 +27,7 @@
   body.app #drum{display:block}
   body.app #frame{display:none}
   body.app #right{background:var(--bg)}
-  #btnDraw{display:none !important}
-  body.app #btnDraw{display:flex !important}
-  #btnDraw.busy{color:var(--accent) !important;border-color:var(--accent) !important}
+  body.app #drum.hot{cursor:pointer}
   .modeRow{display:flex;align-items:center;gap:20px;margin-bottom:22px;padding-bottom:22px;border-bottom:2px solid var(--line)}
   .modeRow h2{margin:0 !important}
   .modeRow .seg{display:flex;gap:10px}
@@ -142,9 +140,6 @@
   <div id="board"></div>
   <div id="typing">入力中:<b id="buf"></b></div>
   <div id="tools">
-    <button id="btnDraw" title="抽選（Space）">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1.3" fill="currentColor"/><circle cx="16" cy="8" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="8" cy="16" r="1.3" fill="currentColor"/><circle cx="16" cy="16" r="1.3" fill="currentColor"/></svg>
-    </button>
     <button id="btnSettings" title="設定（S）">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     </button>
@@ -583,7 +578,6 @@ function drawRandom(){
   drumState.pick = rem[randInt(rem.length)];
   drumState.phase = "spin"; drumState.t = 0; drumState.shown = 0;
   balls = balls.filter(b => b.n !== drumState.pick);   // 選ばれた玉は見えている中から抜く
-  $("btnDraw").classList.add("busy");
   broadcast();
   return "ok";
 }
@@ -663,6 +657,18 @@ function drawDrum(){
   for(let i=0;i<8;i++){ const a = i*Math.PI/4 + Math.PI/8; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(a)*R, Math.sin(a)*R); ctx.stroke(); }
   ctx.beginPath(); ctx.arc(0, 0, 30, 0, Math.PI*2); ctx.fillStyle = "#ffcc33"; ctx.fill();
   ctx.restore();
+  // ハンドル（クリックで回す。回転中は一緒に回る）
+  const H = CRANK, hot = drumHover && drumState.phase === "idle";
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "#2a3160"; ctx.lineWidth = 24;
+  ctx.beginPath(); ctx.moveTo(cx + R*0.9, cy); ctx.lineTo(H.x, H.y); ctx.stroke();
+  const ka = drumState.rot * 1.0 - Math.PI/2, kx = H.x + Math.cos(ka)*H.arm, ky = H.y + Math.sin(ka)*H.arm;
+  ctx.strokeStyle = hot ? "#ffe08a" : "#ffcc33"; ctx.lineWidth = 18;
+  ctx.beginPath(); ctx.moveTo(H.x, H.y); ctx.lineTo(kx, ky); ctx.stroke();
+  ctx.beginPath(); ctx.arc(H.x, H.y, 20, 0, Math.PI*2); ctx.fillStyle = "#ffcc33"; ctx.fill();
+  if(hot){ ctx.beginPath(); ctx.arc(kx, ky, 46, 0, Math.PI*2); ctx.fillStyle = "rgba(255,204,51,.18)"; ctx.fill(); }
+  ctx.beginPath(); ctx.arc(kx, ky, 30, 0, Math.PI*2); ctx.fillStyle = hot ? "#ff7a93" : "#ff4d6d"; ctx.fill();
+  ctx.lineWidth = 5; ctx.strokeStyle = "#0e1124"; ctx.stroke();
   // 残り数
   ctx.fillStyle = "#9aa0d0"; ctx.font = `700 30px "Noto Sans JP","Hiragino Sans","Yu Gothic UI",sans-serif`; ctx.textAlign = "left"; ctx.textBaseline = "top";
   ctx.fillText(`のこり ${remaining().length} 個`, 40, 36);
@@ -691,7 +697,6 @@ function drumLoop(ts){
     s.t += dt;
     if(s.t >= FLY_SEC){
       s.phase = "idle"; s.shown = s.pick; const n = s.pick; s.pick = 0;
-      $("btnDraw").classList.remove("busy");
       addNum(n);   // 左側に表示（スマホにも反映）
     }
   }else s.omega *= 0.9;
@@ -706,16 +711,23 @@ function setMode(m){
   document.body.classList.toggle("app", mode === "app");
   document.querySelectorAll(".modeRow .seg button").forEach(b => b.classList.toggle("sel", b.dataset.mode === mode));
   $("modeDesc").textContent = mode === "app"
-    ? "画面上のガラガラで抽選します（Space キー・🎲ボタン・スマホの「抽選」）"
+    ? "画面上のガラガラで抽選します（ガラガラかハンドルをクリック・Space キー・スマホの「抽選」）"
     : "スマホやOBSのカメラでガラガラを映します";
   if(mode === "app"){ syncBalls(); if(!drumRAF){ drumLast = 0; drumRAF = requestAnimationFrame(drumLoop); } }
   else if(drumState.phase !== "idle"){ // 抽選中に切り替えたら、その番号はそのまま確定
-    const n = drumState.pick; drumState.phase = "idle"; drumState.pick = 0; $("btnDraw").classList.remove("busy"); addNum(n);
+    const n = drumState.pick; drumState.phase = "idle"; drumState.pick = 0; addNum(n);
   }
   broadcast();
 }
 document.querySelectorAll(".modeRow .seg button").forEach(b => b.onclick = e => { e.currentTarget.blur(); setMode(b.dataset.mode); });
-$("btnDraw").onclick = e => { e.currentTarget.blur(); drawRandom(); };
+// ガラガラ本体かハンドルをクリックすると回る
+const CRANK = {x: DRUM.cx + DRUM.R + 62, y: DRUM.cy, arm: 92};
+let drumHover = false;
+function drumPoint(e){ const c = $("drum"), r = c.getBoundingClientRect(); return {x:(e.clientX - r.left) * 1120 / r.width, y:(e.clientY - r.top) * 1080 / r.height}; }
+function onMachine(p){ return Math.hypot(p.x - DRUM.cx, p.y - DRUM.cy) <= DRUM.R + 10 || Math.hypot(p.x - CRANK.x, p.y - CRANK.y) <= CRANK.arm + 45; }
+$("drum").addEventListener("mousemove", e => { drumHover = onMachine(drumPoint(e)); $("drum").classList.toggle("hot", drumHover); });
+$("drum").addEventListener("mouseleave", () => { drumHover = false; $("drum").classList.remove("hot"); });
+$("drum").addEventListener("click", e => { if(mode === "app" && onMachine(drumPoint(e))) drawRandom(); });
 function initMode(){ let m = "camera"; try{ m = localStorage.getItem(MODE_KEY) || "camera"; }catch(e){} setMode(m); }
 
 // ---- どの画面サイズでも1920×1080の比率で全体を収める ----
