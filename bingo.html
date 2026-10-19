@@ -14,6 +14,8 @@
   }
   html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent;
     font-family:"Noto Sans JP","Hiragino Sans","Yu Gothic UI","Meiryo",sans-serif;color:var(--text)}
+  /* 1920×1080 の画面を、はみ出さない固定の枠の中で拡大縮小する（スマホでページ幅が広がらないように） */
+  #vp{position:fixed;inset:0;overflow:hidden}
   #stage{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0}
   #left{position:absolute;left:0;top:0;width:806px;z-index:1;height:1080px;box-sizing:border-box;
     padding:40px 44px;background:var(--bg);display:flex;flex-direction:column;gap:26px}
@@ -149,10 +151,32 @@
   #revealNote{font-size:17px;color:var(--hit);min-height:24px;margin-top:6px}
   .phone .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
   .phone .btns button{font-size:18px !important}
+  /* スマホで開いたときの案内（画面の拡大縮小の外に置く） */
+  #mobileGate{position:fixed;inset:0;z-index:100;background:var(--bg);display:none;overflow-y:auto;
+    padding:max(24px,env(safe-area-inset-top)) 20px max(24px,env(safe-area-inset-bottom))}
+  #mobileGate.show{display:flex}
+  #mobileGate .card{margin:auto;width:100%;max-width:420px;display:flex;flex-direction:column;gap:16px;text-align:center}
+  #mobileGate .logo{font-size:44px;font-weight:900;letter-spacing:.14em;line-height:1}
+  #mobileGate .logo span:nth-child(1){color:var(--B)} #mobileGate .logo span:nth-child(2){color:var(--I)}
+  #mobileGate .logo span:nth-child(3){color:var(--N)} #mobileGate .logo span:nth-child(4){color:var(--G)} #mobileGate .logo span:nth-child(5){color:var(--O)}
+  #mobileGate p{margin:0;font-size:15px;line-height:1.75;color:#cfd3f5}
+  #mobileGate a,#mobileGate button{display:block;font:inherit;font-weight:800;font-size:17px;text-decoration:none;border-radius:14px;padding:15px;cursor:pointer}
+  #mobileGate .go{background:var(--accent);color:#0e1124;border:2px solid var(--accent)}
+  #mobileGate .stay{background:transparent;color:#cfd3f5;border:2px solid var(--line)}
+  #mobileGate small{font-size:12px;color:#9aa0d0;line-height:1.7}
 </style>
 </head>
 <body>
-<div id="stage">
+<div id="mobileGate" role="dialog" aria-labelledby="mgTitle">
+  <div class="card">
+    <div class="logo"><span>B</span><span>I</span><span>N</span><span>G</span><span>O</span></div>
+    <p id="mgTitle"><b>この画面はPCやテレビに映す用です。</b><br>スマホでは、ビンゴ画面のリモコンやカメラとして使えます。</p>
+    <a class="go" id="mgRemote" href="camera.html">スマホをリモコンにする</a>
+    <button class="stay" id="mgStay">このまま開く</button>
+    <small>「このまま開く」場合は、スマホを横向きにすると見やすくなります。<br>リモコンにするには、PCでビンゴ画面を開き、設定のQRコードをスマホで読むのがかんたんです。</small>
+  </div>
+</div>
+<div id="vp"><div id="stage">
 <div id="left">
   <div class="title">
     <h1><span>B</span><span>I</span><span>N</span><span>G</span><span>O</span></h1>
@@ -245,7 +269,7 @@
     右上の「閉じる」・S キー・Esc・歯車ボタンで閉じる（開いている間は画面共有や配信にも映ります）
   </div>
 </div>
-</div>
+</div></div>
 
 <script>
 const MAX = 75;
@@ -811,6 +835,16 @@ function fit(){
 addEventListener("resize",fit);
 
 load(); layoutFrame(); fit(); render(false); initCam(); initMode();
+
+// ---- スマホで開いたときは、最初に案内を出す（OBS・タブレット・PCでは出さない） ----
+(function(){
+  const phone = !IN_OBS && matchMedia("(pointer:coarse)").matches && Math.min(screen.width, screen.height) < 600;
+  let dismissed = false; try{ dismissed = sessionStorage.getItem("obs-bingo-mobile-ok") === "1"; }catch(e){}
+  if(!phone || dismissed) return;
+  $("mgRemote").href = location.protocol === "https:" ? new URL("camera.html", location.href).href : CAM_PAGE;
+  $("mobileGate").classList.add("show");
+  $("mgStay").onclick = () => { $("mobileGate").classList.remove("show"); try{ sessionStorage.setItem("obs-bingo-mobile-ok", "1"); }catch(e){} };
+})();
 </script>
 </body>
 </html>
