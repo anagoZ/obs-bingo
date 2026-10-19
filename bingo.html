@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <title>Bingo Display</title>
+<script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
   :root{
     --bg:#0e1124; --panel:#171c38; --line:#2a3160;
@@ -69,21 +71,33 @@
   #tools svg{width:28px;height:28px}
 
   /* 設定パネル（S キーで開閉） */
-  #settings{position:absolute;left:1000px;top:200px;width:720px;box-sizing:border-box;padding:36px 40px;
+  #settings{position:absolute;left:940px;top:24px;width:840px;box-sizing:border-box;padding:26px 36px;
     background:#1d2347;border:3px solid var(--accent);border-radius:24px;font-size:26px;display:none;z-index:10;
     box-shadow:0 20px 60px rgba(0,0,0,.6)}
   #settings.open{display:block}
-  #settings h2{margin:0 0 20px;font-size:34px}
-  #settings .presets{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:22px}
+  #settings h2{margin:0 0 14px;font-size:30px}
+  #settings .presets{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}
   #settings button{font:inherit;font-size:22px;padding:10px 16px;border-radius:12px;border:2px solid var(--line);
     background:var(--panel);color:#fff;cursor:pointer}
   #settings button.sel{border-color:var(--accent);color:var(--accent)}
-  #settings .custom{display:flex;align-items:center;gap:12px;margin-bottom:24px}
+  #settings .custom{display:flex;align-items:center;gap:12px;margin-bottom:16px}
   #settings input{font:inherit;width:140px;padding:8px 12px;border-radius:10px;border:2px solid var(--line);
     background:#0e1124;color:#fff;text-align:center}
-  #settings .info{background:#0e1124;border-radius:14px;padding:18px 22px;font-size:22px;line-height:1.7}
+  #settings .info{background:#0e1124;border-radius:14px;padding:14px 20px;font-size:20px;line-height:1.6}
   #settings .info b{color:var(--accent);font-variant-numeric:tabular-nums}
   #settings .hint{margin-top:16px;font-size:18px;color:#9aa0d0}
+  #settings hr{border:none;border-top:2px solid var(--line);margin:18px 0}
+  .phone{display:flex;gap:28px;align-items:center}
+  #qr{width:200px;height:200px;background:#fff;padding:10px;border-radius:12px;flex:none}
+  #qr img,#qr canvas{width:200px !important;height:200px !important}
+  .phone .code{font-size:22px;color:#cfd3f5}
+  .phone .code b{display:block;font-size:64px;letter-spacing:.12em;color:var(--accent);font-variant-numeric:tabular-nums;line-height:1.2}
+  .phone .st{display:flex;align-items:center;gap:10px;font-size:22px;margin:10px 0 14px}
+  #camDot{width:16px;height:16px;border-radius:50%;background:var(--dim)}
+  #camDot.ok{background:#3fd68a} #camDot.wait{background:var(--accent)} #camDot.ng{background:var(--hit)}
+  .phone label{font-size:20px;color:#cfd3f5;display:flex;align-items:center;gap:10px;cursor:pointer}
+  #settings .phone label input{width:24px;height:24px;padding:0}
+  #camLink{font-size:15px;color:#9aa0d0;word-break:break-all;margin-top:8px}
 </style>
 </head>
 <body>
@@ -113,6 +127,18 @@
 <div id="right"><div id="frame"></div></div>
 
 <div id="settings">
+  <h2>スマホカメラ</h2>
+  <div class="phone">
+    <div id="qr"></div>
+    <div>
+      <div class="code">スマホでQRを読むか、カメラ送信ページにこのコードを入力<b id="camCode">------</b></div>
+      <div class="st"><div id="camDot"></div><div id="camStatus">準備中…</div></div>
+      <label><input type="checkbox" id="autoFit" checked> スマホの映像に枠の比率を合わせる</label>
+      <button id="newCode" style="margin-top:12px">コードを変える</button>
+      <div id="camLink"></div>
+    </div>
+  </div>
+  <hr>
   <h2>カメラの解像度</h2>
   <div class="presets" id="presets"></div>
   <div class="custom">
@@ -120,7 +146,7 @@
     <button id="applyRes">適用</button>
   </div>
   <div class="info">
-    OBSでのカメラの置き場所（右クリック →「変換」→「変換の編集」）<br>
+    OBSのカメラソースを使う場合の置き場所（右クリック →「変換」→「変換の編集」）<br>
     位置 X <b id="iX"></b> / Y <b id="iY"></b><br>
     サイズ 幅 <b id="iW"></b> × 高さ <b id="iH"></b>
   </div>
@@ -290,8 +316,85 @@ $("btnSettings").onclick=e=>{ e.currentTarget.blur(); toggleSettings(); };
 if(new URLSearchParams(location.search).has("cam") && navigator.mediaDevices){
   navigator.mediaDevices.getUserMedia({video:{width:1920,height:1080},audio:false}).then(s=>{
     const v=document.createElement("video"); v.autoplay=true; v.muted=true; v.playsInline=true; v.srcObject=s;
-    $("frame").appendChild(v);
+    v.dataset.local="1"; $("frame").appendChild(v);
   }).catch(()=>toast("カメラを開けませんでした"));
+}
+
+// ---- スマホカメラ受信（camera.html から WebRTC で映像を受け取る） ----
+const CAM_PAGE = "https://anagoz.github.io/obs-bingo/camera.html";
+const CAM_CODE_KEY = "obs-bingo-recv-code", AUTOFIT_KEY = "obs-bingo-autofit";
+const PEER_PREFIX = "obsbingo-";
+let camCode = "", peer = null, camCall = null, peerTimer = null;
+
+function newCamCode(){ return String(Math.floor(100000 + Math.random()*900000)); }
+function camPageUrl(){
+  const base = /^https?:$/.test(location.protocol) ? new URL("camera.html", location.href).href : CAM_PAGE;
+  return base + "?code=" + camCode;
+}
+function setCam(text, state){ $("camStatus").textContent = text; $("camDot").className = state || ""; }
+function drawQr(){
+  $("camCode").textContent = camCode;
+  $("camLink").textContent = camPageUrl();
+  $("qr").innerHTML = "";
+  if(window.QRCode) new QRCode($("qr"), {text: camPageUrl(), width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M});
+  else $("qr").textContent = "QRを表示できません";
+}
+function showRemote(stream){
+  $("frame").querySelectorAll("video").forEach(v => v.remove());
+  const v = document.createElement("video");
+  v.autoplay = true; v.muted = true; v.playsInline = true; v.srcObject = stream;
+  const fitToVideo = () => { if($("autoFit").checked && v.videoWidth && v.videoHeight) setRes(v.videoWidth, v.videoHeight); };
+  v.addEventListener("loadedmetadata", fitToVideo);
+  v.addEventListener("resize", fitToVideo);   // スマホの向きが変わったとき
+  $("frame").appendChild(v);
+  v.play().catch(()=>{});
+}
+function clearRemote(){ $("frame").querySelectorAll("video").forEach(v => { if(v.dataset.local !== "1") v.remove(); }); }
+function retryPeer(msg){
+  setCam(msg, "ng");
+  clearTimeout(peerTimer);
+  peerTimer = setTimeout(startPeer, 5000);
+}
+function startPeer(){
+  clearTimeout(peerTimer);
+  if(!window.Peer){ setCam("接続ライブラリを読み込めません（ネット接続を確認）", "ng"); return; }
+  if(peer){ try{ peer.destroy(); }catch(e){} }
+  setCam("サーバーに接続中…", "wait");
+  const p = peer = new Peer(PEER_PREFIX + camCode);
+  p.on("open", () => { if(peer === p && !camCall) setCam("スマホからの接続を待っています", "wait"); });
+  p.on("call", call => {
+    if(camCall){ try{ camCall.close(); }catch(e){} }
+    camCall = call;
+    call.answer();
+    call.on("stream", s => { if(camCall === call){ showRemote(s); setCam("スマホとつながっています", "ok"); toast("スマホのカメラにつながりました"); } });
+    const lost = () => { if(camCall === call){ camCall = null; clearRemote(); setCam("切断されました。スマホからの接続を待っています", "wait"); } };
+    call.on("close", lost);
+    call.on("error", lost);
+    const pc = call.peerConnection;
+    if(pc) pc.addEventListener("iceconnectionstatechange", () => {
+      if(pc.iceConnectionState === "failed" || pc.iceConnectionState === "closed") lost();
+    });
+  });
+  p.on("disconnected", () => { if(peer === p){ try{ p.reconnect(); }catch(e){} } });
+  p.on("error", err => {
+    if(peer !== p) return;
+    if(err.type === "unavailable-id") retryPeer("前の接続が残っています。再接続中…");
+    else if(["network","server-error","socket-error","socket-closed"].includes(err.type)) retryPeer("サーバーに再接続中…");
+  });
+}
+function initCam(){
+  try{ camCode = localStorage.getItem(CAM_CODE_KEY) || ""; }catch(e){}
+  if(!/^\d{6}$/.test(camCode)){ camCode = newCamCode(); try{ localStorage.setItem(CAM_CODE_KEY, camCode); }catch(e){} }
+  try{ const a = localStorage.getItem(AUTOFIT_KEY); if(a !== null) $("autoFit").checked = a === "1"; }catch(e){}
+  $("autoFit").onchange = e => { try{ localStorage.setItem(AUTOFIT_KEY, e.target.checked ? "1" : "0"); }catch(_){}
+    const v = $("frame").querySelector("video"); if(e.target.checked && v?.videoWidth) setRes(v.videoWidth, v.videoHeight); };
+  $("newCode").onclick = e => {
+    e.currentTarget.blur();
+    camCode = newCamCode(); try{ localStorage.setItem(CAM_CODE_KEY, camCode); }catch(_){}
+    if(camCall){ try{ camCall.close(); }catch(_){} camCall = null; clearRemote(); }
+    drawQr(); startPeer();
+  };
+  drawQr(); startPeer();
 }
 
 // ---- どの画面サイズでも1920×1080の比率で全体を収める ----
@@ -302,7 +405,7 @@ function fit(){
 }
 addEventListener("resize",fit);
 
-load(); layoutFrame(); fit(); render(false);
+load(); layoutFrame(); fit(); render(false); initCam();
 </script>
 </body>
 </html>

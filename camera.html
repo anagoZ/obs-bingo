@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ビンゴ カメラ送信</title>
+<script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<style>
+  :root{--bg:#0e1124;--panel:#171c38;--line:#2a3160;--accent:#ffcc33;--ok:#3fd68a;--ng:#ff4d6d;--text:#fff;--dim:#9aa0d0}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Noto Sans JP","Hiragino Sans","Yu Gothic UI","Meiryo",sans-serif;-webkit-text-size-adjust:100%}
+  body{min-height:100dvh;display:flex;flex-direction:column}
+  header{padding:14px 16px;font-weight:900;font-size:20px;letter-spacing:.06em}
+  header span{color:var(--accent)}
+  #preview{position:relative;flex:1;min-height:240px;background:#000;display:flex;align-items:center;justify-content:center}
+  #preview video{width:100%;height:100%;object-fit:contain;position:absolute;inset:0}
+  #preview .ph{color:var(--dim);font-size:15px;padding:16px;text-align:center}
+  #status{display:flex;align-items:center;gap:10px;padding:12px 16px;font-size:15px;background:var(--panel)}
+  #dot{width:12px;height:12px;border-radius:50%;background:var(--dim);flex:none}
+  #dot.ok{background:var(--ok)} #dot.ng{background:var(--ng)} #dot.wait{background:var(--accent)}
+  .controls{padding:16px;display:flex;flex-direction:column;gap:14px;padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+  label{font-size:13px;color:var(--dim);display:block;margin-bottom:6px}
+  .row{display:flex;gap:10px}
+  .row > *{flex:1}
+  input,select{width:100%;font:inherit;font-size:22px;padding:10px 12px;border-radius:12px;border:2px solid var(--line);
+    background:#0a0d1c;color:#fff;letter-spacing:.15em;text-align:center}
+  select{font-size:16px;letter-spacing:0}
+  button{font:inherit;font-size:17px;font-weight:700;padding:14px;border-radius:14px;border:2px solid var(--line);
+    background:var(--panel);color:#fff}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#0e1124}
+  button.stop{background:var(--ng);border-color:var(--ng)}
+  button:disabled{opacity:.5}
+  .note{font-size:12px;color:var(--dim);line-height:1.6}
+</style>
+</head>
+<body>
+<header><span>BINGO</span> カメラ送信</header>
+
+<div id="preview"><div class="ph">「カメラ開始」を押すとここに映像が出ます</div></div>
+<div id="status"><div id="dot"></div><div id="statusText">待機中</div></div>
+
+<div class="controls">
+  <div>
+    <label>接続コード（OBSのビンゴ画面の設定に出ている6桁）</label>
+    <input id="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000" autocomplete="off">
+  </div>
+  <div class="row">
+    <div>
+      <label>画質</label>
+      <select id="quality">
+        <option value="1280x720">720p（おすすめ）</option>
+        <option value="1920x1080">1080p（高画質）</option>
+        <option value="640x480">480p（軽い）</option>
+      </select>
+    </div>
+    <div>
+      <label>カメラ</label>
+      <button id="flip" style="width:100%">外カメラ</button>
+    </div>
+  </div>
+  <button id="go" class="primary">カメラ開始</button>
+  <div class="note">
+    スマホとPCを同じWi-Fiにつないでください。配信中は画面を開いたままにしてください（スリープしないようにしています）。
+    縦向き・横向きはスマホの向きのまま送られます。
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const CODE_KEY = "obs-bingo-cam-code";
+const PREFIX = "obsbingo-";
+let stream = null, peer = null, call = null;
+let running = false, facing = "environment", retryTimer = null, wakeLock = null;
+
+// コード：URL ?code= → 前回の値
+const qCode = new URLSearchParams(location.search).get("code");
+try{ $("code").value = (qCode && /^\d{6}$/.test(qCode)) ? qCode : (localStorage.getItem(CODE_KEY) || ""); }catch(e){ if(qCode) $("code").value = qCode; }
+$("code").addEventListener("input", e => { e.target.value = e.target.value.replace(/\D/g,"").slice(0,6); });
+
+function setStatus(text, state){
+  $("statusText").textContent = text;
+  $("dot").className = state || "";
+}
+
+async function openCamera(){
+  const [w,h] = $("quality").value.split("x").map(Number);
+  const s = await navigator.mediaDevices.getUserMedia({
+    video:{ facingMode:{ideal:facing}, width:{ideal:w}, height:{ideal:h}, frameRate:{ideal:30} },
+    audio:false
+  });
+  if(stream) stream.getTracks().forEach(t=>t.stop());
+  stream = s;
+  let v = $("preview").querySelector("video");
+  if(!v){
+    $("preview").innerHTML = "";
+    v = document.createElement("video"); v.autoplay = true; v.muted = true; v.playsInline = true;
+    $("preview").appendChild(v);
+  }
+  v.srcObject = stream;
+  // 送信中なら映像だけ差し替え
+  const sender = call?.peerConnection?.getSenders().find(x => x.track && x.track.kind === "video");
+  if(sender) await sender.replaceTrack(stream.getVideoTracks()[0]);
+}
+
+function scheduleRetry(msg){
+  if(!running) return;
+  setStatus(msg + "（3秒後に再接続）", "ng");
+  clearTimeout(retryTimer);
+  retryTimer = setTimeout(connect, 3000);
+}
+
+function connect(){
+  if(!running) return;
+  clearTimeout(retryTimer);
+  const target = PREFIX + $("code").value;
+  if(!peer || peer.destroyed){
+    setStatus("サーバーに接続中…", "wait");
+    peer = new Peer();
+    peer.on("open", () => connect());
+    peer.on("error", err => {
+      if(err.type === "peer-unavailable") scheduleRetry("OBS側が見つかりません。コードとOBSの画面を確認してください");
+      else if(["network","server-error","socket-error","socket-closed","disconnected"].includes(err.type)){
+        try{ peer.destroy(); }catch(e){}
+        scheduleRetry("サーバーにつながりません");
+      } else scheduleRetry("エラー：" + err.type);
+    });
+    peer.on("disconnected", () => { try{ peer.reconnect(); }catch(e){} });
+    return;
+  }
+  if(!peer.open){ return; } // open で再度呼ばれる
+  if(call){ try{ call.close(); }catch(e){} call = null; }
+  setStatus("OBSにつないでいます…", "wait");
+  const c = peer.call(target, stream);
+  if(!c){ scheduleRetry("接続できませんでした"); return; }
+  call = c;
+  const pc = c.peerConnection;
+  const onState = () => {
+    if(call !== c) return;
+    const st = pc.iceConnectionState;
+    if(st === "connected" || st === "completed") setStatus("配信中", "ok");
+    else if(st === "failed" || st === "closed") scheduleRetry("接続が切れました");
+    else if(st === "disconnected"){
+      setStatus("通信が不安定です…", "wait");
+      setTimeout(() => { if(call === c && pc.iceConnectionState === "disconnected") scheduleRetry("接続が切れました"); }, 5000);
+    }
+  };
+  if(pc) pc.addEventListener("iceconnectionstatechange", onState);
+  c.on("close", () => { if(call === c) scheduleRetry("OBS側が切断しました"); });
+  c.on("error", () => { if(call === c) scheduleRetry("接続エラー"); });
+}
+
+async function keepAwake(){
+  try{ if("wakeLock" in navigator && running && document.visibilityState === "visible") wakeLock = await navigator.wakeLock.request("screen"); }catch(e){}
+}
+document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") keepAwake(); });
+
+async function start(){
+  const code = $("code").value;
+  if(!/^\d{6}$/.test(code)){ setStatus("6桁の接続コードを入れてください", "ng"); $("code").focus(); return; }
+  if(!window.Peer){ setStatus("接続ライブラリを読み込めませんでした。通信状況を確認してページを再読み込みしてください", "ng"); return; }
+  if(!navigator.mediaDevices?.getUserMedia){ setStatus("このブラウザではカメラが使えません（https で開いているか確認）", "ng"); return; }
+  try{ localStorage.setItem(CODE_KEY, code); }catch(e){}
+  $("go").disabled = true;
+  try{ await openCamera(); }
+  catch(e){ setStatus("カメラを開けませんでした。ブラウザのカメラ許可を確認してください", "ng"); $("go").disabled = false; return; }
+  running = true;
+  $("go").disabled = false; $("go").textContent = "停止"; $("go").className = "stop";
+  $("code").disabled = true;
+  keepAwake();
+  connect();
+}
+
+function stop(){
+  running = false; clearTimeout(retryTimer);
+  if(call){ try{ call.close(); }catch(e){} call = null; }
+  if(peer){ try{ peer.destroy(); }catch(e){} peer = null; }
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; }
+  try{ wakeLock?.release(); }catch(e){}
+  $("preview").innerHTML = '<div class="ph">停止しました</div>';
+  $("go").textContent = "カメラ開始"; $("go").className = "primary";
+  $("code").disabled = false;
+  setStatus("停止中", "");
+}
+
+$("go").onclick = () => running ? stop() : start();
+$("flip").onclick = async () => {
+  facing = facing === "environment" ? "user" : "environment";
+  $("flip").textContent = facing === "environment" ? "外カメラ" : "内カメラ";
+  if(stream){ try{ await openCamera(); }catch(e){ setStatus("カメラを切り替えられませんでした", "ng"); } }
+};
+$("quality").onchange = async () => { if(stream){ try{ await openCamera(); }catch(e){ setStatus("画質を変更できませんでした", "ng"); } } };
+</script>
+</body>
+</html>
