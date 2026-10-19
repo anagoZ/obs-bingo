@@ -405,6 +405,13 @@ function openData(target){
     if(data !== d || !m || typeof m !== "object") return;
     if(m.type === "state" && Array.isArray(m.drawn)){ drawn = m.drawn; drawState(); }
     else if(m.type === "msg" && m.text) flash(m.text);
+    else if(m.type === "rejected"){
+      // ロック中・PC側で切断 → 再接続を繰り返さずに止める
+      stop();
+      $("setupMsg").textContent = m.reason === "kicked"
+        ? "ビンゴ画面側で切断されました"
+        : "ビンゴ画面は別のスマホとつながっているため接続できません（ロック中）";
+    }
   });
   d.on("close", () => { if(data === d) setOnline(false); });
 }

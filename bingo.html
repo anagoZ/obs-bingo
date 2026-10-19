@@ -101,6 +101,16 @@
   .phone label{font-size:20px;color:#cfd3f5;display:flex;align-items:center;gap:10px;cursor:pointer}
   #settings .phone label input{width:24px;height:24px;padding:0}
   #camLink{font-size:15px;color:#9aa0d0;word-break:break-all;margin-top:8px}
+  /* QRとコードは普段は隠す（配信に映らないように） */
+  #qrBox{position:relative;width:220px;height:220px;flex:none}
+  #qrBox #qr{position:absolute;inset:0;visibility:hidden}
+  #qrBox.shown #qr{visibility:visible}
+  #revealBtn{position:absolute;inset:0;width:100%;height:100%;border-radius:12px;border:3px dashed var(--line) !important;
+    background:#0e1124 !important;font-size:20px !important;line-height:1.5;color:#cfd3f5 !important}
+  #qrBox.shown #revealBtn{display:none}
+  #revealNote{font-size:17px;color:var(--hit);min-height:24px;margin-top:6px}
+  .phone .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+  .phone .btns button{font-size:18px !important}
 </style>
 </head>
 <body>
@@ -134,12 +144,20 @@
  <section>
   <h2>スマホカメラ</h2>
   <div class="phone">
-    <div id="qr"></div>
+    <div id="qrBox">
+      <div id="qr"></div>
+      <button id="revealBtn">QRとコードを<br>表示する</button>
+    </div>
     <div>
-      <div class="code">スマホでQRを読むか、カメラ送信ページにこのコードを入力<b id="camCode">------</b></div>
+      <div class="code">スマホでQRを読むか、カメラ送信ページにこのコードを入力<b id="camCode">●●●●●●</b></div>
+      <div id="revealNote"></div>
       <div class="st"><div id="camDot"></div><div id="camStatus">準備中…</div></div>
-      <label><input type="checkbox" id="autoFit" checked> スマホの映像に枠の比率を合わせる</label>
-      <button id="newCode" style="margin-top:12px">コードを変える</button>
+      <label><input type="checkbox" id="lockChk" checked> つながったスマホ以外は受け付けない（ロック）</label>
+      <label style="margin-top:8px"><input type="checkbox" id="autoFit" checked> スマホの映像に枠の比率を合わせる</label>
+      <div class="btns">
+        <button id="kick">今のスマホを切断</button>
+        <button id="newCode">コードを変える</button>
+      </div>
       <div id="camLink"></div>
     </div>
   </div>
@@ -285,7 +303,7 @@ $("applyRes").onclick=()=>setRes(parseInt($("resW").value,10), parseInt($("resH"
 function toggleSettings(force){
   const s=$("settings"), open = force ?? !s.classList.contains("open");
   s.classList.toggle("open", open);
-  if(!open) document.activeElement?.blur();
+  if(!open){ document.activeElement?.blur(); if(typeof setRevealed === "function") setRevealed(false); }
 }
 
 // ---- キー操作 ----
@@ -331,10 +349,38 @@ if(new URLSearchParams(location.search).has("cam") && navigator.mediaDevices){
 
 // ---- スマホカメラ受信（camera.html から WebRTC で映像を受け取る） ----
 const CAM_PAGE = "https://anagoz.github.io/obs-bingo/camera.html";
-const CAM_CODE_KEY = "obs-bingo-recv-code", AUTOFIT_KEY = "obs-bingo-autofit";
+const CAM_CODE_KEY = "obs-bingo-recv-code", AUTOFIT_KEY = "obs-bingo-autofit", LOCK_KEY = "obs-bingo-lock";
 const PEER_PREFIX = "obsbingo-";
+const REVEAL_SECONDS = 60;
 let camCode = "", peer = null, camCall = null, peerTimer = null;
+let revealed = false, revealTimer = null, lockPeer = null;
 const remotes = new Set();   // スマホからの数字入力の接続
+
+// ---- QRとコードの表示（普段は隠し、押したときだけ一定時間表示） ----
+function setRevealed(on){
+  revealed = on; clearInterval(revealTimer);
+  $("qrBox").classList.toggle("shown", on);
+  drawQr();
+  if(on){
+    let left = REVEAL_SECONDS;
+    const tick = () => {
+      $("revealNote").textContent = `表示中は配信にも映ります（あと${left}秒で隠します）`;
+      if(--left < 0) setRevealed(false);
+    };
+    tick(); revealTimer = setInterval(tick, 1000);
+  }else $("revealNote").textContent = "";
+}
+
+// ---- ロック：つながっているスマホ以外を断る ----
+function sessionActive(){ return !!camCall || [...remotes].some(c => c.open); }
+function refuse(peerId){ return $("lockChk").checked && lockPeer && peerId !== lockPeer && sessionActive(); }
+function claim(peerId){ if(!lockPeer || !sessionActive()) lockPeer = peerId; }
+function releaseIfIdle(){ if(!sessionActive()) lockPeer = null; }
+function rejectConn(conn, reason){
+  const bye = () => { try{ conn.send({type:"rejected", reason}); }catch(e){} setTimeout(() => { try{ conn.close(); }catch(e){} }, 800); };
+  if(conn.open) bye(); else conn.on("open", bye);
+}
+function connectedText(){ return "スマホとつながっています" + ($("lockChk").checked ? "（ロック中）" : ""); }
 
 function broadcast(){
   for(const c of remotes){ try{ if(c.open) c.send({type:"state", drawn}); }catch(e){} }
@@ -358,7 +404,7 @@ function acceptRemote(conn){
   remotes.add(conn);
   conn.on("open", () => { try{ conn.send({type:"state", drawn}); }catch(e){} });
   conn.on("data", m => onRemote(conn, m));
-  const drop = () => remotes.delete(conn);
+  const drop = () => { remotes.delete(conn); releaseIfIdle(); };
   conn.on("close", drop); conn.on("error", drop);
 }
 
@@ -369,9 +415,10 @@ function camPageUrl(){
 }
 function setCam(text, state){ $("camStatus").textContent = text; $("camDot").className = state || ""; }
 function drawQr(){
+  $("qr").innerHTML = "";
+  if(!revealed){ $("camCode").textContent = "●●●●●●"; $("camLink").textContent = ""; return; }
   $("camCode").textContent = camCode;
   $("camLink").textContent = camPageUrl();
-  $("qr").innerHTML = "";
   if(window.QRCode) new QRCode($("qr"), {text: camPageUrl(), width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M});
   else $("qr").textContent = "QRを表示できません";
 }
@@ -399,11 +446,14 @@ function startPeer(){
   const p = peer = new Peer(PEER_PREFIX + camCode);
   p.on("open", () => { if(peer === p && !camCall) setCam("スマホからの接続を待っています", "wait"); });
   p.on("call", call => {
+    if(peer !== p) return;
+    if(refuse(call.peer)){ try{ call.close(); }catch(e){} toast("別のスマホからの接続を断りました（ロック中）"); return; }
+    claim(call.peer);
     if(camCall){ try{ camCall.close(); }catch(e){} }
     camCall = call;
     call.answer();
-    call.on("stream", s => { if(camCall === call){ showRemote(s); setCam("スマホとつながっています", "ok"); toast("スマホのカメラにつながりました"); } });
-    const lost = () => { if(camCall === call){ camCall = null; clearRemote(); setCam("切断されました。スマホからの接続を待っています", "wait"); } };
+    call.on("stream", s => { if(camCall === call){ showRemote(s); setCam(connectedText(), "ok"); setRevealed(false); toast("スマホのカメラにつながりました"); } });
+    const lost = () => { if(camCall === call){ camCall = null; clearRemote(); releaseIfIdle(); setCam("切断されました。スマホからの接続を待っています", "wait"); } };
     call.on("close", lost);
     call.on("error", lost);
     const pc = call.peerConnection;
@@ -411,7 +461,11 @@ function startPeer(){
       if(pc.iceConnectionState === "failed" || pc.iceConnectionState === "closed") lost();
     });
   });
-  p.on("connection", conn => { if(peer === p) acceptRemote(conn); });
+  p.on("connection", conn => {
+    if(peer !== p) return;
+    if(refuse(conn.peer)){ rejectConn(conn, "locked"); return; }
+    claim(conn.peer); acceptRemote(conn);
+  });
   p.on("disconnected", () => { if(peer === p){ try{ p.reconnect(); }catch(e){} } });
   p.on("error", err => {
     if(peer !== p) return;
@@ -425,12 +479,29 @@ function initCam(){
   try{ const a = localStorage.getItem(AUTOFIT_KEY); if(a !== null) $("autoFit").checked = a === "1"; }catch(e){}
   $("autoFit").onchange = e => { try{ localStorage.setItem(AUTOFIT_KEY, e.target.checked ? "1" : "0"); }catch(_){}
     const v = $("frame").querySelector("video"); if(e.target.checked && v?.videoWidth) setRes(v.videoWidth, v.videoHeight); };
+  try{ const l = localStorage.getItem(LOCK_KEY); if(l !== null) $("lockChk").checked = l === "1"; }catch(e){}
+  $("lockChk").onchange = e => {
+    try{ localStorage.setItem(LOCK_KEY, e.target.checked ? "1" : "0"); }catch(_){}
+    if(camCall) setCam(connectedText(), "ok");
+  };
+  // 今つながっているスマホを切断（スマホ側は自動再接続せずに止まる）
+  const kickAll = reason => {
+    for(const c of remotes) rejectConn(c, reason);
+    if(camCall){ const c = camCall; camCall = null; setTimeout(() => { try{ c.close(); }catch(_){} }, 300); clearRemote(); }
+    lockPeer = null;
+  };
+  $("kick").onclick = e => {
+    e.currentTarget.blur();
+    if(!sessionActive()){ toast("つながっているスマホはありません"); return; }
+    kickAll("kicked"); setCam("切断しました。スマホからの接続を待っています", "wait"); toast("スマホを切断しました");
+  };
+  $("revealBtn").onclick = e => { e.currentTarget.blur(); setRevealed(true); };
   $("newCode").onclick = e => {
     e.currentTarget.blur();
+    kickAll("kicked");
     camCode = newCamCode(); try{ localStorage.setItem(CAM_CODE_KEY, camCode); }catch(_){}
-    if(camCall){ try{ camCall.close(); }catch(_){} camCall = null; clearRemote(); }
-    for(const c of remotes){ try{ c.close(); }catch(_){} } remotes.clear();
-    drawQr(); startPeer();
+    setTimeout(() => { for(const c of remotes){ try{ c.close(); }catch(_){} } remotes.clear(); startPeer(); }, 900);
+    setRevealed(true);
   };
   drawQr(); startPeer();
 }
