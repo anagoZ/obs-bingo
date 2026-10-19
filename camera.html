@@ -59,6 +59,13 @@
   .now .sp{flex:1}
   .now button{font-size:13px;padding:8px 10px}
   #reset.armed{border-color:var(--ng);color:var(--ng)}
+  #drawBtn{display:none;background:var(--accent);border-color:var(--accent);color:#0e1124;font-size:15px;padding:8px 14px}
+  #run.appmode #drawBtn{display:block}
+  #run.appmode .now{flex-wrap:wrap}
+  #run.appmode #drawBtn{order:10;flex:1 1 100%;padding:12px;font-size:18px}
+  .ball,.count,.now button{white-space:nowrap}
+  #drawBtn:disabled{opacity:.5}
+  #run.nocam #preview, #run.nocam #togglePreview{display:none}
 
   #inputArea{display:flex;flex-direction:column;min-height:0}
   .tabs{display:flex;gap:6px;padding:8px 12px 0}
@@ -111,6 +118,7 @@
   body.land .now .ball{min-width:0;flex:1 1 50%;height:40px;font-size:22px;white-space:nowrap}
   body.land .now .count{flex:0 0 auto;white-space:nowrap}
   body.land .now button{flex:1 1 40%;padding:8px 4px;white-space:nowrap}
+  body.land #drawBtn{flex:1 1 100%;order:-1;padding:12px;font-size:18px}
   body.land .send{grid-row:3;grid-column:2;flex-direction:column;gap:8px;padding:0 10px 10px 0}
   body.land #entry{min-height:52px;font-size:30px;flex:none}
   body.land #send{width:100%;max-width:none;height:60px;flex:none}
@@ -146,7 +154,7 @@
     <div>
       <label>カメラ</label>
       <div class="seg" id="segFacing">
-        <button data-v="environment" class="on">外カメラ</button><button data-v="user">内カメラ</button>
+        <button data-v="environment" class="on">外カメラ</button><button data-v="user">内カメラ</button><button data-v="none">使わない</button>
       </div>
     </div>
     <div>
@@ -183,6 +191,7 @@
       <div class="ball" id="lastBall">-</div>
       <div class="count"><b id="count">0</b> 個目</div>
       <div class="sp"></div>
+      <button id="drawBtn">🎲 抽選</button>
       <button id="undo">取り消し</button>
       <button id="reset">リセット</button>
     </div>
@@ -217,7 +226,7 @@
     <div>
       <label>カメラ</label>
       <div class="seg" id="segFacing2">
-        <button data-v="environment" class="on">外カメラ</button><button data-v="user">内カメラ</button>
+        <button data-v="environment" class="on">外カメラ</button><button data-v="user">内カメラ</button><button data-v="none">使わない</button>
       </div>
     </div>
     <div>
@@ -268,7 +277,21 @@ function bindSeg(ids, key, onChange){
   }));
   sync();
 }
-const reopen = async () => { if(stream){ try{ await openCamera(); }catch(e){ flash("カメラを切り替えられませんでした"); } } };
+function updateGoLabel(){ $("go").textContent = pref.facing === "none" ? "接続する（カメラなし）" : "カメラ開始"; }
+function applyNoCam(){ $("run").classList.toggle("nocam", !stream); }
+const reopen = async () => {
+  updateGoLabel();
+  if(!running) return;
+  if(pref.facing === "none"){   // カメラをやめて、操作だけの接続にする
+    if(stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; }
+    const c = call; call = null; try{ c?.close(); }catch(e){}
+    $("preview").innerHTML = ""; applyNoCam();
+    if(data && data.open) setStatus("つながっています（カメラなし）", "ok");
+    return;
+  }
+  try{ const had = !!stream; await openCamera(); applyNoCam(); if(!had) connect(); }
+  catch(e){ flash("カメラを開けませんでした"); }
+};
 bindSeg(["segFacing","segFacing2"], "facing", reopen);
 bindSeg(["segQuality","segQuality2"], "quality", reopen);
 
@@ -407,10 +430,14 @@ function scheduleRetry(msg){
 function openData(target){
   if(data){ try{ data.close(); }catch(e){} }
   const d = data = peer.connect(target, {reliable:true});
-  d.on("open", () => { if(data === d){ setOnline(true); setStatus("配信中", "ok"); } });
+  d.on("open", () => { if(data === d){ setOnline(true); setStatus(stream ? "配信中" : "つながっています（カメラなし）", "ok"); } });
   d.on("data", m => {
     if(data !== d || !m || typeof m !== "object") return;
-    if(m.type === "state" && Array.isArray(m.drawn)){ drawn = m.drawn; drawState(); }
+    if(m.type === "state" && Array.isArray(m.drawn)){
+      drawn = m.drawn; drawState();
+      $("run").classList.toggle("appmode", m.mode === "app");
+      $("drawBtn").disabled = !!m.spinning;
+    }
     else if(m.type === "msg" && m.text) flash(m.text);
     else if(m.type === "rejected"){
       // ロック中・PC側で切断 → 再接続を繰り返さずに止める
@@ -420,7 +447,7 @@ function openData(target){
         : "ビンゴ画面は別のスマホとつながっているため接続できません（ロック中）";
     }
   });
-  d.on("close", () => { if(data === d) setOnline(false); });
+  d.on("close", () => { if(data === d){ setOnline(false); if(!call) scheduleRetry("ビンゴ画面が切断しました"); } });
 }
 function connect(){
   if(!running) return;
@@ -443,6 +470,7 @@ function connect(){
   if(!peer.open) return;
   if(call){ try{ call.close(); }catch(e){} call = null; }
   setStatus("ビンゴ画面につないでいます…", "wait");
+  if(!stream){ openData(target); return; }   // カメラなし：操作だけつなぐ
   const c = peer.call(target, stream);
   if(!c){ scheduleRetry("接続できませんでした"); return; }
   call = c;
@@ -475,11 +503,15 @@ async function start(){
   m.textContent = "";
   if(!CODE_RE.test(code)){ m.textContent = "8文字の接続コードを入れてください（例：ab3k-9xqz）"; $("code").focus(); return; }
   if(!window.Peer){ m.textContent = "接続ライブラリを読み込めませんでした。ページを再読み込みしてください"; return; }
-  if(!navigator.mediaDevices?.getUserMedia){ m.textContent = "このブラウザではカメラが使えません（https で開いているか確認）"; return; }
+  const useCam = pref.facing !== "none";
+  if(useCam && !navigator.mediaDevices?.getUserMedia){ m.textContent = "このブラウザではカメラが使えません（https で開いているか確認）。カメラを「使わない」にすると操作だけできます"; return; }
   try{ localStorage.setItem(CODE_KEY, code); }catch(e){}
   $("go").disabled = true;
-  try{ await openCamera(); }
-  catch(e){ m.textContent = "カメラを開けませんでした。ブラウザのカメラ許可を確認してください"; $("go").disabled = false; return; }
+  if(useCam){
+    try{ await openCamera(); }
+    catch(e){ m.textContent = "カメラを開けませんでした。ブラウザのカメラ許可を確認してください"; $("go").disabled = false; return; }
+  }
+  applyNoCam();
   $("go").disabled = false;
   running = true;
   setOnline(false);
@@ -498,7 +530,9 @@ function stop(){
   $("sheet").classList.remove("show");
   showScreen("setup");
 }
+$("drawBtn").onclick = () => { if(send({type:"draw"})){ $("drawBtn").disabled = true; if(navigator.vibrate) navigator.vibrate(30); } };
 $("go").onclick = start;
+updateGoLabel();
 $("stop").onclick = stop;
 drawEntry(); drawState();
 </script>
