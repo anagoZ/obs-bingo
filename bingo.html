@@ -12,7 +12,7 @@
   html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent;
     font-family:"Noto Sans JP","Hiragino Sans","Yu Gothic UI","Meiryo",sans-serif;color:var(--text)}
   #stage{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0}
-  #left{position:absolute;left:0;top:0;width:800px;height:1080px;box-sizing:border-box;
+  #left{position:absolute;left:0;top:0;width:806px;z-index:1;height:1080px;box-sizing:border-box;
     padding:40px 44px;background:var(--bg);display:flex;flex-direction:column;gap:26px}
 
   /* 右側：枠の中だけ透明。枠の外は背景色で隠す */
@@ -59,6 +59,15 @@
     background:rgba(0,0,0,.8);font-size:30px;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap}
   #toast.show{opacity:1}
 
+  /* 右下のボタン（設定・リセット） */
+  #tools{position:absolute;right:44px;bottom:22px;display:flex;gap:14px}
+  #tools button{width:56px;height:56px;border-radius:50%;border:2px solid var(--line);background:var(--panel);
+    color:var(--dim);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;
+    transition:color .2s,border-color .2s}
+  #tools button:hover{color:#fff;border-color:#fff}
+  #tools button.armed{color:var(--hit);border-color:var(--hit)}
+  #tools svg{width:28px;height:28px}
+
   /* 設定パネル（S キーで開閉） */
   #settings{position:absolute;left:1000px;top:200px;width:720px;box-sizing:border-box;padding:36px 40px;
     background:#1d2347;border:3px solid var(--accent);border-radius:24px;font-size:26px;display:none;z-index:10;
@@ -92,6 +101,14 @@
   <div id="history"><div class="lbl">履歴</div></div>
   <div id="board"></div>
   <div id="typing">入力中:<b id="buf"></b></div>
+  <div id="tools">
+    <button id="btnSettings" title="設定（S）">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+    <button id="btnReset" title="リセット（Shift+R）">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 9 9 9"/></svg>
+    </button>
+  </div>
 </div>
 <div id="right"><div id="frame"></div></div>
 
@@ -107,7 +124,10 @@
     位置 X <b id="iX"></b> / Y <b id="iY"></b><br>
     サイズ 幅 <b id="iW"></b> × 高さ <b id="iH"></b>
   </div>
-  <div class="hint">S キーまたは Esc で閉じる（開いている間は配信にも映ります）</div>
+  <div class="hint">
+    ショートカット：数字→Enter 表示 ／ Backspace 1つ取り消し ／ Esc 入力クリア ／ Shift+R×2 リセット ／ S 設定<br>
+    S キー・Esc・歯車ボタンで閉じる（開いている間は配信にも映ります）
+  </div>
 </div>
 </div>
 
@@ -250,12 +270,21 @@ document.addEventListener("keydown",e=>{
     else if(drawn.length){ const n=drawn.pop(); save(); render(false); toast(`${n} を取り消しました`); }
     return;
   }
-  if(e.key==="R" && e.shiftKey){
-    const now=Date.now();
-    if(now-resetArmed<2500){ drawn=[]; save(); render(false); toast("リセットしました"); resetArmed=0; }
-    else{ resetArmed=now; toast("もう一度 Shift+R でリセット"); }
-  }
+  if(e.key==="R" && e.shiftKey) requestReset("もう一度 Shift+R でリセット");
 });
+
+// ---- リセット（2回押しで確定） ----
+function requestReset(msg){
+  const now=Date.now(), btn=$("btnReset");
+  if(now-resetArmed<2500){
+    drawn=[]; save(); render(false); toast("リセットしました"); resetArmed=0; btn.classList.remove("armed");
+  }else{
+    resetArmed=now; toast(msg); btn.classList.add("armed");
+    clearTimeout(requestReset._t); requestReset._t=setTimeout(()=>btn.classList.remove("armed"),2500);
+  }
+}
+$("btnReset").onclick=e=>{ e.currentTarget.blur(); requestReset("もう一度押すとリセット"); };
+$("btnSettings").onclick=e=>{ e.currentTarget.blur(); toggleSettings(); };
 
 // ---- ブラウザで試すとき用：?cam=1 で枠の中にPCのカメラを表示 ----
 if(new URLSearchParams(location.search).has("cam") && navigator.mediaDevices){
