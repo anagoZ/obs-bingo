@@ -234,6 +234,7 @@ function render(animate){
     const d=document.createElement("div"); d.className="h"; d.textContent=n;
     d.style.borderColor=COLORS[letterOf(n)]; h.appendChild(d);
   });
+  broadcast();
 }
 
 function toast(msg){
@@ -333,6 +334,33 @@ const CAM_PAGE = "https://anagoz.github.io/obs-bingo/camera.html";
 const CAM_CODE_KEY = "obs-bingo-recv-code", AUTOFIT_KEY = "obs-bingo-autofit";
 const PEER_PREFIX = "obsbingo-";
 let camCode = "", peer = null, camCall = null, peerTimer = null;
+const remotes = new Set();   // スマホからの数字入力の接続
+
+function broadcast(){
+  for(const c of remotes){ try{ if(c.open) c.send({type:"state", drawn}); }catch(e){} }
+}
+function onRemote(conn, m){
+  if(!m || typeof m !== "object") return;
+  const reply = text => { try{ conn.send({type:"msg", text}); }catch(e){} };
+  if(m.type === "add"){
+    const n = parseInt(m.n, 10);
+    if(!(n>=1 && n<=MAX)) return reply(`1〜${MAX}で入力してね`);
+    if(drawn.includes(n)) return reply(`${n} はもう出ています`);
+    addNum(n); reply(`${letterOf(n)} ${n} を表示しました`);
+  }else if(m.type === "undo"){
+    if(!drawn.length) return reply("取り消す番号がありません");
+    const n = drawn.pop(); save(); render(false); toast(`${n} を取り消しました`); reply(`${n} を取り消しました`);
+  }else if(m.type === "reset"){
+    drawn = []; save(); render(false); toast("リセットしました"); reply("リセットしました");
+  }
+}
+function acceptRemote(conn){
+  remotes.add(conn);
+  conn.on("open", () => { try{ conn.send({type:"state", drawn}); }catch(e){} });
+  conn.on("data", m => onRemote(conn, m));
+  const drop = () => remotes.delete(conn);
+  conn.on("close", drop); conn.on("error", drop);
+}
 
 function newCamCode(){ return String(Math.floor(100000 + Math.random()*900000)); }
 function camPageUrl(){
@@ -383,6 +411,7 @@ function startPeer(){
       if(pc.iceConnectionState === "failed" || pc.iceConnectionState === "closed") lost();
     });
   });
+  p.on("connection", conn => { if(peer === p) acceptRemote(conn); });
   p.on("disconnected", () => { if(peer === p){ try{ p.reconnect(); }catch(e){} } });
   p.on("error", err => {
     if(peer !== p) return;
@@ -400,6 +429,7 @@ function initCam(){
     e.currentTarget.blur();
     camCode = newCamCode(); try{ localStorage.setItem(CAM_CODE_KEY, camCode); }catch(_){}
     if(camCall){ try{ camCall.close(); }catch(_){} camCall = null; clearRemote(); }
+    for(const c of remotes){ try{ c.close(); }catch(_){} } remotes.clear();
     drawQr(); startPeer();
   };
   drawQr(); startPeer();
