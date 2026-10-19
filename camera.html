@@ -3,194 +3,342 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<title>ビンゴ カメラ送信</title>
+<meta name="theme-color" content="#0e1124">
+<title>ビンゴ カメラ＆入力</title>
 <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
 <style>
-  :root{--bg:#0e1124;--panel:#171c38;--line:#2a3160;--accent:#ffcc33;--ok:#3fd68a;--ng:#ff4d6d;--text:#fff;--dim:#9aa0d0;
+  :root{--bg:#0e1124;--panel:#171c38;--panel2:#1d2347;--line:#2a3160;--accent:#ffcc33;--ok:#3fd68a;--ng:#ff4d6d;--text:#fff;--dim:#9aa0d0;
     --B:#3fa7ff;--I:#ff5e7e;--N:#c9c9d6;--G:#3fd68a;--O:#ffb13f}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{margin:0;background:var(--bg);color:var(--text);
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);overscroll-behavior:none;
     font-family:"Noto Sans JP","Hiragino Sans","Yu Gothic UI","Meiryo",sans-serif;-webkit-text-size-adjust:100%}
-  body{min-height:100dvh;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom)}
-  header{padding:12px 16px;font-weight:900;font-size:18px;letter-spacing:.06em;display:flex;justify-content:space-between;align-items:center}
-  header span{color:var(--accent)}
-  #preview{position:relative;height:30vh;min-height:180px;background:#000;display:flex;align-items:center;justify-content:center}
-  #preview video{width:100%;height:100%;object-fit:contain;position:absolute;inset:0}
-  #preview .ph{color:var(--dim);font-size:14px;padding:16px;text-align:center}
-  #status{display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:14px;background:var(--panel)}
+  button{font:inherit;font-weight:700;border-radius:12px;border:2px solid var(--line);background:var(--panel);color:#fff;
+    touch-action:manipulation;cursor:pointer}
+  button:active{filter:brightness(1.35)}
+  button:disabled{opacity:.4}
+  .screen{position:fixed;inset:0;display:none;flex-direction:column;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+  .screen.show{display:flex}
+
+  /* ===== 開始画面 ===== */
+  #setup{overflow-y:auto}
+  .setup-inner{width:100%;max-width:440px;margin:auto;padding:24px 20px;display:flex;flex-direction:column;gap:18px}
+  .logo{font-size:30px;font-weight:900;letter-spacing:.12em;text-align:center}
+  .logo span:nth-child(1){color:var(--B)} .logo span:nth-child(2){color:var(--I)} .logo span:nth-child(3){color:var(--N)}
+  .logo span:nth-child(4){color:var(--G)} .logo span:nth-child(5){color:var(--O)}
+  .logo small{display:block;font-size:14px;letter-spacing:.1em;color:var(--dim);margin-top:4px}
+  label{font-size:13px;color:var(--dim);display:block;margin-bottom:6px}
+  #code{width:100%;font:inherit;font-size:34px;font-weight:800;padding:12px;border-radius:14px;border:2px solid var(--line);
+    background:#0a0d1c;color:#fff;letter-spacing:.3em;text-align:center}
+  .seg{display:flex;background:#0a0d1c;border:2px solid var(--line);border-radius:14px;padding:4px;gap:4px}
+  .seg button{flex:1;border:none;background:transparent;color:var(--dim);font-size:15px;padding:10px 4px;border-radius:10px}
+  .seg button.on{background:var(--panel2);color:#fff;box-shadow:inset 0 0 0 2px var(--accent)}
+  #go{background:var(--accent);border-color:var(--accent);color:#0e1124;font-size:20px;padding:16px}
+  #setupMsg{min-height:20px;font-size:14px;color:var(--ng);text-align:center}
+  .note{font-size:12px;color:var(--dim);line-height:1.7}
+
+  /* ===== 操作画面 ===== */
+  #run{display:none}
+  #run.show{display:grid;grid-template-rows:auto auto 1fr auto;grid-template-columns:100%}
+  .bar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--panel)}
   #dot{width:12px;height:12px;border-radius:50%;background:var(--dim);flex:none}
   #dot.ok{background:var(--ok)} #dot.ng{background:var(--ng)} #dot.wait{background:var(--accent)}
+  #statusText{font-size:13px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .icon{width:40px;height:40px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:10px;flex:none}
+  .icon svg{width:22px;height:22px}
+  .icon.on{border-color:var(--accent);color:var(--accent)}
 
-  /* 数字入力 */
-  #pad{padding:12px 16px 4px;transition:opacity .2s}
-  #pad.off{opacity:.35;pointer-events:none}
-  .now{display:flex;align-items:center;gap:12px;margin-bottom:10px}
-  .now .last{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--dim)}
-  .now .ball{min-width:56px;height:40px;padding:0 10px;border-radius:20px;display:flex;align-items:center;justify-content:center;
-    font-weight:900;font-size:22px;background:var(--panel);border:3px solid var(--line)}
-  .now .count{margin-left:auto;font-size:14px;color:var(--dim)}
-  .now .count b{color:var(--accent);font-size:20px}
-  #entry{height:64px;border-radius:14px;background:#0a0d1c;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;
-    gap:12px;font-size:40px;font-weight:900;font-variant-numeric:tabular-nums;margin-bottom:10px}
-  #entry .ltr{font-size:24px;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#0e1124}
-  #entry .placeholder{font-size:16px;font-weight:400;color:var(--dim)}
-  .keys{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-  .keys button{height:58px;font-size:28px;font-weight:800}
-  .keys .enter{background:var(--accent);border-color:var(--accent);color:#0e1124;font-size:20px}
-  .sub{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
-  .sub button{font-size:15px;padding:12px}
-  .sub .armed{border-color:var(--ng);color:var(--ng)}
-  #msg{min-height:22px;font-size:14px;color:var(--accent);text-align:center;margin-top:8px}
+  #topArea{display:flex;flex-direction:column}
+  #preview{position:relative;height:24vh;min-height:120px;background:#000}
+  #preview video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+  #run.nopreview #preview{display:none}
+  .now{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:2px solid var(--panel)}
+  .ball{min-width:72px;height:44px;padding:0 12px;border-radius:22px;display:flex;align-items:center;justify-content:center;
+    font-weight:900;font-size:24px;background:var(--panel);border:3px solid var(--line);font-variant-numeric:tabular-nums}
+  .count{font-size:13px;color:var(--dim)} .count b{color:var(--accent);font-size:20px}
+  .now .sp{flex:1}
+  .now button{font-size:13px;padding:8px 10px}
+  #reset.armed{border-color:var(--ng);color:var(--ng)}
 
-  details{margin:8px 16px 16px;background:var(--panel);border-radius:14px;padding:4px 14px}
-  summary{padding:10px 0;font-size:15px;font-weight:700;cursor:pointer}
-  .controls{display:flex;flex-direction:column;gap:12px;padding:4px 0 14px}
-  label{font-size:12px;color:var(--dim);display:block;margin-bottom:6px}
-  .row{display:flex;gap:10px}
-  .row > *{flex:1}
-  input,select{width:100%;font:inherit;font-size:22px;padding:10px 12px;border-radius:12px;border:2px solid var(--line);
-    background:#0a0d1c;color:#fff;letter-spacing:.15em;text-align:center}
-  select{font-size:16px;letter-spacing:0}
-  button{font:inherit;font-size:16px;font-weight:700;padding:12px;border-radius:14px;border:2px solid var(--line);
-    background:var(--panel);color:#fff;touch-action:manipulation}
-  button:active{filter:brightness(1.3)}
-  #go{background:var(--accent);border-color:var(--accent);color:#0e1124;font-size:17px;padding:14px}
-  #go.stop{background:var(--ng);border-color:var(--ng);color:#fff}
-  button:disabled{opacity:.5}
-  .note{font-size:12px;color:var(--dim);line-height:1.6}
+  #inputArea{display:flex;flex-direction:column;min-height:0}
+  .tabs{display:flex;gap:6px;padding:8px 12px 0}
+  .tabs button{flex:1;font-size:14px;padding:8px;border-radius:10px 10px 0 0;border-bottom:none;color:var(--dim);background:transparent}
+  .tabs button.on{background:var(--panel);color:#fff;border-color:var(--panel)}
+  .pane{flex:1;min-height:0;display:none;background:var(--panel);margin:0 12px;border-radius:0 0 12px 12px;padding:8px}
+  .pane.on{display:flex;flex-direction:column}
+
+  /* 一覧（ビンゴカードと同じ縦の列） */
+  #grid{flex:1;min-height:0;overflow-y:auto;display:grid;grid-template-columns:repeat(5,1fr);gap:4px;align-content:start}
+  #grid .hd{position:sticky;top:0;z-index:1;font-weight:900;font-size:18px;text-align:center;padding:4px 0;border-radius:8px;color:#0e1124}
+  #grid .c{height:36px;border-radius:8px;border:none;background:#0a0d1c;color:#cfd3f5;font-size:17px;font-weight:700;
+    font-variant-numeric:tabular-nums;padding:0}
+  #grid .c.done{background:var(--ng);color:#fff;opacity:.55}
+  #grid .c.last{background:var(--accent);color:#0e1124;opacity:1}
+  #grid .c.sel{box-shadow:inset 0 0 0 3px #fff;background:#3a4380;color:#fff}
+
+  /* テンキー */
+  .keys{flex:1;display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:1fr;gap:8px}
+  .keys button{font-size:30px;font-weight:800;min-height:48px;background:#0a0d1c}
+
+  /* 下：入力中の番号＋表示ボタン */
+  .send{display:flex;gap:10px;align-items:stretch;padding:10px 12px 12px}
+  #entry{flex:1;min-height:60px;border-radius:14px;background:#0a0d1c;border:2px solid var(--line);display:flex;align-items:center;
+    justify-content:center;gap:10px;font-size:36px;font-weight:900;font-variant-numeric:tabular-nums}
+  #entry .ltr{font-size:20px;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#0e1124}
+  #entry .ph{font-size:14px;font-weight:400;color:var(--dim)}
+  #send{width:38%;max-width:200px;background:var(--accent);border-color:var(--accent);color:#0e1124;font-size:22px}
+  #send:disabled{background:var(--panel);border-color:var(--line);color:var(--dim);opacity:1}
+  #msg{position:fixed;left:50%;top:calc(64px + env(safe-area-inset-top));transform:translateX(-50%);background:rgba(0,0,0,.85);
+    padding:10px 16px;border-radius:12px;font-size:14px;white-space:nowrap;opacity:0;transition:opacity .2s;pointer-events:none;z-index:30}
+  #msg.show{opacity:1}
+  #run.off #inputArea, #run.off .send, #run.off .now button{opacity:.35;pointer-events:none}
+
+  /* 横向き：左にプレビュー、右に入力 */
+  @media (orientation:landscape) and (max-height:600px){
+    #run.show{grid-template-columns:44% 56%;grid-template-rows:auto 1fr auto}
+    .bar{grid-column:1 / 3}
+    #topArea{grid-row:2 / 4;grid-column:1;min-height:0}
+    #preview{flex:1;height:auto}
+    #inputArea{grid-row:2;grid-column:2}
+    .send{grid-row:3;grid-column:2}
+    #grid .c{height:30px;font-size:15px}
+  }
+
+  /* 設定シート */
+  #sheet{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:flex-end;z-index:20}
+  #sheet.show{display:flex}
+  .sheet-inner{width:100%;max-width:520px;margin:0 auto;background:var(--panel2);border-radius:20px 20px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));
+    display:flex;flex-direction:column;gap:14px}
+  .sheet-inner h3{margin:0;font-size:17px}
+  .sheet-inner .codeinfo{font-size:13px;color:var(--dim)} .sheet-inner .codeinfo b{color:var(--accent);letter-spacing:.15em}
+  #stop{background:var(--ng);border-color:var(--ng);padding:14px;font-size:16px}
+  #closeSheet{padding:12px;font-size:15px}
 </style>
 </head>
 <body>
-<header><div><span>BINGO</span> カメラ＆入力</div></header>
 
-<div id="preview"><div class="ph">下の「接続」から「カメラ開始」を押してください</div></div>
-<div id="status"><div id="dot"></div><div id="statusText">待機中</div></div>
-
-<div id="pad" class="off">
-  <div class="now">
-    <div class="last">今の番号 <div class="ball" id="lastBall">-</div></div>
-    <div class="count"><b id="count">0</b> 個目</div>
-  </div>
-  <div id="entry"><span class="placeholder">数字を押して「表示」</span></div>
-  <div class="keys">
-    <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
-    <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
-    <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
-    <button data-k="del">⌫</button><button data-k="0">0</button><button data-k="ok" class="enter">表示</button>
-  </div>
-  <div class="sub">
-    <button id="undo">直前を取り消し</button>
-    <button id="reset">リセット</button>
-  </div>
-  <div id="msg"></div>
-</div>
-
-<details id="setup" open>
-  <summary>接続</summary>
-  <div class="controls">
+<!-- ===== 開始画面 ===== -->
+<div id="setup" class="screen show">
+  <div class="setup-inner">
+    <div class="logo"><span>B</span><span>I</span><span>N</span><span>G</span><span>O</span><small>カメラ＆入力</small></div>
     <div>
-      <label>接続コード（OBSのビンゴ画面の設定に出ている6桁）</label>
+      <label>接続コード（ビンゴ画面の設定に出ている6桁）</label>
       <input id="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000" autocomplete="off">
     </div>
-    <div class="row">
-      <div>
-        <label>画質</label>
-        <select id="quality">
-          <option value="1280x720">720p（おすすめ）</option>
-          <option value="1920x1080">1080p（高画質）</option>
-          <option value="640x480">480p（軽い）</option>
-        </select>
+    <div>
+      <label>カメラ</label>
+      <div class="seg" id="segFacing">
+        <button data-v="environment" class="on">外カメラ</button><button data-v="user">内カメラ</button>
       </div>
-      <div>
-        <label>カメラ</label>
-        <button id="flip" style="width:100%">外カメラ</button>
+    </div>
+    <div>
+      <label>画質</label>
+      <div class="seg" id="segQuality">
+        <button data-v="640x480">軽い</button><button data-v="1280x720" class="on">標準 720p</button><button data-v="1920x1080">高画質</button>
       </div>
     </div>
     <button id="go">カメラ開始</button>
-    <div class="note">
-      スマホとPCを同じWi-Fiにつないでください。配信中はこの画面を開いたままにしてください（スリープしないようにしています）。
+    <div id="setupMsg"></div>
+    <div class="note">スマホとPCを同じWi-Fiにつないでください。配信中はこの画面を開いたままにしてください（スリープしないようにしています）。</div>
+  </div>
+</div>
+
+<!-- ===== 操作画面 ===== -->
+<div id="run" class="screen off">
+  <div class="bar">
+    <div id="dot"></div><div id="statusText">接続中…</div>
+    <button class="icon on" id="togglePreview" title="プレビュー">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
+    <button class="icon" id="openSheet" title="設定">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+    </button>
+  </div>
+
+  <div id="topArea">
+    <div id="preview"></div>
+    <div class="now">
+      <div class="ball" id="lastBall">-</div>
+      <div class="count"><b id="count">0</b> 個目</div>
+      <div class="sp"></div>
+      <button id="undo">取り消し</button>
+      <button id="reset">リセット</button>
     </div>
   </div>
-</details>
+
+  <div id="inputArea">
+    <div class="tabs">
+      <button data-tab="grid" class="on">一覧</button><button data-tab="keys">テンキー</button>
+    </div>
+    <div class="pane on" id="pane-grid"><div id="grid"></div></div>
+    <div class="pane" id="pane-keys">
+      <div class="keys">
+        <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+        <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+        <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+        <button data-k="clr">C</button><button data-k="0">0</button><button data-k="del">⌫</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="send">
+    <div id="entry"></div>
+    <button id="send" disabled>表示</button>
+  </div>
+</div>
+
+<!-- 設定シート -->
+<div id="sheet">
+  <div class="sheet-inner">
+    <h3>設定</h3>
+    <div class="codeinfo">接続コード <b id="sheetCode"></b></div>
+    <div>
+      <label>カメラ</label>
+      <div class="seg" id="segFacing2">
+        <button data-v="environment" class="on">外カメラ</button><button data-v="user">内カメラ</button>
+      </div>
+    </div>
+    <div>
+      <label>画質</label>
+      <div class="seg" id="segQuality2">
+        <button data-v="640x480">軽い</button><button data-v="1280x720" class="on">標準 720p</button><button data-v="1920x1080">高画質</button>
+      </div>
+    </div>
+    <button id="stop">停止して最初の画面に戻る</button>
+    <button id="closeSheet">閉じる</button>
+  </div>
+</div>
+
+<div id="msg"></div>
 
 <script>
 const $ = id => document.getElementById(id);
-const CODE_KEY = "obs-bingo-cam-code";
+const CODE_KEY = "obs-bingo-cam-code", PREF_KEY = "obs-bingo-cam-pref";
 const PREFIX = "obsbingo-";
 const MAX = 75, LETTERS = ["B","I","N","G","O"];
 const COLORS = {B:"var(--B)",I:"var(--I)",N:"var(--N)",G:"var(--G)",O:"var(--O)"};
 const letterOf = n => LETTERS[Math.floor((n-1)/15)];
 let stream = null, peer = null, call = null, data = null;
-let running = false, facing = "environment", retryTimer = null, wakeLock = null;
+let running = false, retryTimer = null, wakeLock = null;
 let entry = "", drawn = [], resetArmed = 0;
+let pref = {facing:"environment", quality:"1280x720", preview:true, tab:"grid"};
+try{ Object.assign(pref, JSON.parse(localStorage.getItem(PREF_KEY) || "{}")); }catch(e){}
+const savePref = () => { try{ localStorage.setItem(PREF_KEY, JSON.stringify(pref)); }catch(e){} };
 
-// コード：URL ?code= → 前回の値
+// ---- 開始画面 ----
 const qCode = new URLSearchParams(location.search).get("code");
 try{ $("code").value = (qCode && /^\d{6}$/.test(qCode)) ? qCode : (localStorage.getItem(CODE_KEY) || ""); }catch(e){ if(qCode) $("code").value = qCode; }
 $("code").addEventListener("input", e => { e.target.value = e.target.value.replace(/\D/g,"").slice(0,6); });
 
+function bindSeg(ids, key, onChange){
+  const sync = () => ids.forEach(id => $(id).querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.v === pref[key])));
+  ids.forEach(id => $(id).querySelectorAll("button").forEach(b => b.onclick = async () => {
+    if(pref[key] === b.dataset.v) return;
+    pref[key] = b.dataset.v; savePref(); sync();
+    if(onChange) await onChange();
+  }));
+  sync();
+}
+const reopen = async () => { if(stream){ try{ await openCamera(); }catch(e){ flash("カメラを切り替えられませんでした"); } } };
+bindSeg(["segFacing","segFacing2"], "facing", reopen);
+bindSeg(["segQuality","segQuality2"], "quality", reopen);
+
 function setStatus(text, state){ $("statusText").textContent = text; $("dot").className = state || ""; }
 let msgTimer;
-function flash(text){ $("msg").textContent = text; clearTimeout(msgTimer); msgTimer = setTimeout(()=>{ $("msg").textContent = ""; }, 2500); }
+function flash(text){ const m = $("msg"); m.textContent = text; m.classList.add("show"); clearTimeout(msgTimer); msgTimer = setTimeout(()=>m.classList.remove("show"), 2200); }
+function setOnline(on){ $("run").classList.toggle("off", !on); }
 
-// ---- 数字入力 ----
+// ---- 一覧（B〜Oの縦列） ----
+const grid = $("grid");
+LETTERS.forEach(L => { const h = document.createElement("div"); h.className = "hd"; h.textContent = L; h.style.background = COLORS[L]; grid.appendChild(h); });
+for(let r = 1; r <= 15; r++){
+  for(let c = 0; c < 5; c++){
+    const n = c*15 + r, b = document.createElement("button");
+    b.className = "c"; b.id = "g" + n; b.textContent = n;
+    b.onclick = () => {
+      if(drawn.includes(n)){ flash(`${letterOf(n)} ${n} はもう出ています`); return; }
+      entry = entry === String(n) ? "" : String(n);   // もう一度タップで選択解除
+      drawEntry();
+    };
+    grid.appendChild(b);
+  }
+}
+// ---- テンキー ----
+document.querySelectorAll(".keys button").forEach(btn => btn.addEventListener("click", () => {
+  const k = btn.dataset.k;
+  if(k === "del") entry = entry.slice(0,-1);
+  else if(k === "clr") entry = "";
+  else if(entry.length < 2) entry = (entry === "0" ? "" : entry) + k;
+  else entry = k;   // 2桁入っている状態で押したら打ち直し
+  drawEntry();
+}));
+// ---- タブ ----
+function setTab(t){
+  pref.tab = t; savePref();
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === t));
+  document.querySelectorAll(".pane").forEach(p => p.classList.toggle("on", p.id === "pane-" + t));
+}
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => setTab(b.dataset.tab));
+setTab(pref.tab === "keys" ? "keys" : "grid");
+
+function validEntry(){ const n = parseInt(entry, 10); return n>=1 && n<=MAX && !drawn.includes(n) ? n : 0; }
 function drawEntry(){
-  const e = $("entry");
-  if(!entry){ e.innerHTML = '<span class="placeholder">数字を押して「表示」</span>'; return; }
-  const n = parseInt(entry, 10);
-  const L = n>=1 && n<=MAX ? letterOf(n) : null;
-  e.innerHTML = (L ? `<span class="ltr" style="background:${COLORS[L]}">${L}</span>` : "") + `<span>${entry}</span>`;
+  const e = $("entry"), n = parseInt(entry, 10);
+  if(!entry) e.innerHTML = '<span class="ph">番号を選んでください</span>';
+  else{
+    const L = n>=1 && n<=MAX ? letterOf(n) : null;
+    e.innerHTML = (L ? `<span class="ltr" style="background:${COLORS[L]}">${L}</span>` : "") + `<span>${entry}</span>`;
+  }
+  $("send").disabled = !validEntry();
+  document.querySelectorAll("#grid .c.sel").forEach(x => x.classList.remove("sel"));
+  if(n>=1 && n<=MAX) $("g"+n)?.classList.add("sel");
 }
 function drawState(){
-  const last = drawn[drawn.length-1];
-  const b = $("lastBall");
+  const last = drawn[drawn.length-1], b = $("lastBall");
   b.textContent = last ? `${letterOf(last)} ${last}` : "-";
   b.style.borderColor = last ? COLORS[letterOf(last)] : "var(--line)";
   $("count").textContent = drawn.length;
-}
-function send(msg){
-  if(data && data.open){ data.send(msg); return true; }
-  flash("ビンゴ画面とつながっていません"); return false;
-}
-document.querySelectorAll(".keys button").forEach(btn => btn.addEventListener("click", () => {
-  const k = btn.dataset.k;
-  if(k === "del"){ entry = entry.slice(0,-1); }
-  else if(k === "ok"){
-    if(!entry) return;
-    const n = parseInt(entry, 10);
-    if(!(n>=1 && n<=MAX)){ flash(`1〜${MAX}で入力してね`); entry = ""; drawEntry(); return; }
-    if(drawn.includes(n)){ flash(`${n} はもう出ています`); entry = ""; drawEntry(); return; }
-    if(send({type:"add", n})){ entry = ""; if(navigator.vibrate) navigator.vibrate(30); }
+  for(let n = 1; n <= MAX; n++){
+    const g = $("g"+n); g.classList.toggle("done", drawn.includes(n)); g.classList.toggle("last", n === last);
   }
-  else if(entry.length < 2){ entry = (entry === "0" ? "" : entry) + k; }
+  if(entry && drawn.includes(parseInt(entry,10))) entry = "";
   drawEntry();
-}));
+}
+function send(msg){ if(data && data.open){ data.send(msg); return true; } flash("ビンゴ画面とつながっていません"); return false; }
+$("send").onclick = () => {
+  const n = parseInt(entry, 10);
+  if(!(n>=1 && n<=MAX)){ flash(`1〜${MAX}で入力してね`); return; }
+  if(drawn.includes(n)){ flash(`${n} はもう出ています`); return; }
+  if(send({type:"add", n})){ entry = ""; drawEntry(); if(navigator.vibrate) navigator.vibrate(30); }
+};
 $("undo").onclick = () => { if(!drawn.length){ flash("取り消す番号がありません"); return; } send({type:"undo"}); };
 $("reset").onclick = () => {
-  const now = Date.now();
-  if(now - resetArmed < 3000){ resetArmed = 0; $("reset").classList.remove("armed"); $("reset").textContent = "リセット"; send({type:"reset"}); }
+  const now = Date.now(), r = $("reset");
+  if(now - resetArmed < 3000){ resetArmed = 0; r.classList.remove("armed"); r.textContent = "リセット"; send({type:"reset"}); }
   else{
-    resetArmed = now; $("reset").classList.add("armed"); $("reset").textContent = "もう一度押すとリセット";
-    setTimeout(() => { if(Date.now() - resetArmed >= 3000){ $("reset").classList.remove("armed"); $("reset").textContent = "リセット"; } }, 3100);
+    resetArmed = now; r.classList.add("armed"); r.textContent = "もう一度";
+    setTimeout(() => { if(Date.now() - resetArmed >= 3000){ r.classList.remove("armed"); r.textContent = "リセット"; } }, 3100);
   }
 };
-function setPad(on){ $("pad").classList.toggle("off", !on); }
+
+// ---- プレビュー表示切替・設定シート ----
+function applyPreview(){ $("run").classList.toggle("nopreview", !pref.preview); $("togglePreview").classList.toggle("on", pref.preview); }
+$("togglePreview").onclick = () => { pref.preview = !pref.preview; savePref(); applyPreview(); };
+applyPreview();
+$("openSheet").onclick = () => { $("sheetCode").textContent = $("code").value; $("sheet").classList.add("show"); };
+$("closeSheet").onclick = () => $("sheet").classList.remove("show");
+$("sheet").onclick = e => { if(e.target.id === "sheet") $("sheet").classList.remove("show"); };
 
 // ---- カメラ ----
 async function openCamera(){
-  const [w,h] = $("quality").value.split("x").map(Number);
+  const [w,h] = pref.quality.split("x").map(Number);
   const s = await navigator.mediaDevices.getUserMedia({
-    video:{ facingMode:{ideal:facing}, width:{ideal:w}, height:{ideal:h}, frameRate:{ideal:30} },
-    audio:false
+    video:{ facingMode:{ideal:pref.facing}, width:{ideal:w}, height:{ideal:h}, frameRate:{ideal:30} }, audio:false
   });
   if(stream) stream.getTracks().forEach(t=>t.stop());
   stream = s;
   let v = $("preview").querySelector("video");
-  if(!v){
-    $("preview").innerHTML = "";
-    v = document.createElement("video"); v.autoplay = true; v.muted = true; v.playsInline = true;
-    $("preview").appendChild(v);
-  }
+  if(!v){ v = document.createElement("video"); v.autoplay = true; v.muted = true; v.playsInline = true; $("preview").appendChild(v); }
   v.srcObject = stream;
   const sender = call?.peerConnection?.getSenders().find(x => x.track && x.track.kind === "video");
   if(sender) await sender.replaceTrack(stream.getVideoTracks()[0]);
@@ -199,21 +347,21 @@ async function openCamera(){
 // ---- 接続 ----
 function scheduleRetry(msg){
   if(!running) return;
-  setStatus(msg + "（3秒後に再接続）", "ng");
-  setPad(false);
+  setStatus(msg + "（再接続します）", "ng");
+  setOnline(false);
   clearTimeout(retryTimer);
   retryTimer = setTimeout(connect, 3000);
 }
 function openData(target){
   if(data){ try{ data.close(); }catch(e){} }
   const d = data = peer.connect(target, {reliable:true});
-  d.on("open", () => { if(data === d){ setPad(true); setStatus("配信中", "ok"); } });
+  d.on("open", () => { if(data === d){ setOnline(true); setStatus("配信中", "ok"); } });
   d.on("data", m => {
     if(data !== d || !m || typeof m !== "object") return;
     if(m.type === "state" && Array.isArray(m.drawn)){ drawn = m.drawn; drawState(); }
     else if(m.type === "msg" && m.text) flash(m.text);
   });
-  d.on("close", () => { if(data === d){ setPad(false); } });
+  d.on("close", () => { if(data === d) setOnline(false); });
 }
 function connect(){
   if(!running) return;
@@ -224,7 +372,7 @@ function connect(){
     peer = new Peer();
     peer.on("open", () => connect());
     peer.on("error", err => {
-      if(err.type === "peer-unavailable") scheduleRetry("ビンゴ画面が見つかりません。コードとOBSを確認してください");
+      if(err.type === "peer-unavailable") scheduleRetry("ビンゴ画面が見つかりません。コードとOBSを確認");
       else if(["network","server-error","socket-error","socket-closed","disconnected"].includes(err.type)){
         try{ peer.destroy(); }catch(e){}
         scheduleRetry("サーバーにつながりません");
@@ -241,7 +389,7 @@ function connect(){
   call = c;
   openData(target);
   const pc = c.peerConnection;
-  const onState = () => {
+  if(pc) pc.addEventListener("iceconnectionstatechange", () => {
     if(call !== c) return;
     const st = pc.iceConnectionState;
     if(st === "connected" || st === "completed") setStatus("配信中", "ok");
@@ -250,8 +398,7 @@ function connect(){
       setStatus("通信が不安定です…", "wait");
       setTimeout(() => { if(call === c && pc.iceConnectionState === "disconnected") scheduleRetry("接続が切れました"); }, 5000);
     }
-  };
-  if(pc) pc.addEventListener("iceconnectionstatechange", onState);
+  });
   c.on("close", () => { if(call === c) scheduleRetry("ビンゴ画面が切断しました"); });
   c.on("error", () => { if(call === c) scheduleRetry("接続エラー"); });
 }
@@ -261,23 +408,25 @@ async function keepAwake(){
 }
 document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") keepAwake(); });
 
+function showScreen(id){ ["setup","run"].forEach(s => $(s).classList.toggle("show", s === id)); }
+
 async function start(){
-  const code = $("code").value;
-  if(!/^\d{6}$/.test(code)){ setStatus("6桁の接続コードを入れてください", "ng"); $("code").focus(); return; }
-  if(!window.Peer){ setStatus("接続ライブラリを読み込めませんでした。通信状況を確認してページを再読み込みしてください", "ng"); return; }
-  if(!navigator.mediaDevices?.getUserMedia){ setStatus("このブラウザではカメラが使えません（https で開いているか確認）", "ng"); return; }
+  const code = $("code").value, m = $("setupMsg");
+  m.textContent = "";
+  if(!/^\d{6}$/.test(code)){ m.textContent = "6桁の接続コードを入れてください"; $("code").focus(); return; }
+  if(!window.Peer){ m.textContent = "接続ライブラリを読み込めませんでした。ページを再読み込みしてください"; return; }
+  if(!navigator.mediaDevices?.getUserMedia){ m.textContent = "このブラウザではカメラが使えません（https で開いているか確認）"; return; }
   try{ localStorage.setItem(CODE_KEY, code); }catch(e){}
   $("go").disabled = true;
   try{ await openCamera(); }
-  catch(e){ setStatus("カメラを開けませんでした。ブラウザのカメラ許可を確認してください", "ng"); $("go").disabled = false; return; }
+  catch(e){ m.textContent = "カメラを開けませんでした。ブラウザのカメラ許可を確認してください"; $("go").disabled = false; return; }
+  $("go").disabled = false;
   running = true;
-  $("go").disabled = false; $("go").textContent = "停止"; $("go").classList.add("stop");
-  $("code").disabled = true;
-  $("setup").open = false;   // 入力パッドを広く使えるように閉じる
+  setOnline(false);
+  showScreen("run");
   keepAwake();
   connect();
 }
-
 function stop(){
   running = false; clearTimeout(retryTimer);
   if(data){ try{ data.close(); }catch(e){} data = null; }
@@ -285,20 +434,12 @@ function stop(){
   if(peer){ try{ peer.destroy(); }catch(e){} peer = null; }
   if(stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; }
   try{ wakeLock?.release(); }catch(e){}
-  setPad(false);
-  $("preview").innerHTML = '<div class="ph">停止しました</div>';
-  $("go").textContent = "カメラ開始"; $("go").classList.remove("stop");
-  $("code").disabled = false;
-  setStatus("停止中", "");
+  $("preview").innerHTML = "";
+  $("sheet").classList.remove("show");
+  showScreen("setup");
 }
-
-$("go").onclick = () => running ? stop() : start();
-$("flip").onclick = async () => {
-  facing = facing === "environment" ? "user" : "environment";
-  $("flip").textContent = facing === "environment" ? "外カメラ" : "内カメラ";
-  if(stream){ try{ await openCamera(); }catch(e){ setStatus("カメラを切り替えられませんでした", "ng"); } }
-};
-$("quality").onchange = async () => { if(stream){ try{ await openCamera(); }catch(e){ setStatus("画質を変更できませんでした", "ng"); } } };
+$("go").onclick = start;
+$("stop").onclick = stop;
 drawEntry(); drawState();
 </script>
 </body>
