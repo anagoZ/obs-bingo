@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>Bingo Display</title>
+<style>
+  :root{
+    --bg:#0e1124; --panel:#171c38; --line:#2a3160;
+    --accent:#ffcc33; --hit:#ff4d6d; --text:#ffffff; --dim:#58609a;
+    --B:#3fa7ff; --I:#ff5e7e; --N:#c9c9d6; --G:#3fd68a; --O:#ffb13f;
+  }
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent;
+    font-family:"Noto Sans JP","Hiragino Sans","Yu Gothic UI","Meiryo",sans-serif;color:var(--text)}
+  #stage{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0}
+  #left{position:absolute;left:0;top:0;width:800px;height:1080px;box-sizing:border-box;
+    padding:40px 44px;background:var(--bg);display:flex;flex-direction:column;gap:26px}
+  #right{position:absolute;left:800px;top:0;width:1120px;height:1080px;box-sizing:border-box;
+    border:6px solid var(--bg);overflow:hidden}
+  #right video{width:100%;height:100%;object-fit:cover;display:block}
+
+  .title{display:flex;justify-content:space-between;align-items:baseline}
+  .title h1{margin:0;font-size:56px;letter-spacing:.18em;font-weight:900}
+  .title h1 span:nth-child(1){color:var(--B)} .title h1 span:nth-child(2){color:var(--I)}
+  .title h1 span:nth-child(3){color:var(--N)} .title h1 span:nth-child(4){color:var(--G)}
+  .title h1 span:nth-child(5){color:var(--O)}
+  .count{font-size:30px;color:#cfd3f5}
+  .count b{font-size:44px;color:var(--accent);margin:0 4px}
+
+  #current{position:relative;height:400px;border-radius:28px;background:var(--panel);
+    display:flex;align-items:center;justify-content:center;gap:30px;overflow:hidden}
+  #curLetter{font-size:130px;font-weight:900;width:150px;height:150px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;background:var(--dim);color:#0e1124}
+  #curNum{font-size:300px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;
+    text-shadow:0 8px 0 rgba(0,0,0,.35)}
+  #curNum.empty{font-size:80px;color:var(--dim);text-shadow:none}
+  .pop{animation:pop .55s cubic-bezier(.2,1.6,.4,1)}
+  @keyframes pop{0%{transform:scale(.3);opacity:0}100%{transform:scale(1);opacity:1}}
+
+  #history{display:flex;gap:12px;height:76px;align-items:center}
+  #history .lbl{font-size:22px;color:#9aa0d0;width:70px;flex:none}
+  #history .h{width:70px;height:70px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-size:32px;font-weight:800;background:var(--panel);border:4px solid var(--line)}
+
+  #board{display:grid;grid-template-columns:46px repeat(15,1fr);gap:5px;flex:1;align-content:start}
+  #board .rowlbl{font-size:30px;font-weight:900;display:flex;align-items:center;justify-content:center;border-radius:8px;color:#0e1124}
+  #board .cell{height:58px;border-radius:8px;background:var(--panel);color:var(--dim);
+    display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;cursor:pointer;
+    font-variant-numeric:tabular-nums;transition:background .2s,color .2s}
+  #board .cell.on{background:var(--hit);color:#fff}
+  #board .cell.last{background:var(--accent);color:#0e1124}
+
+  #typing{position:absolute;left:44px;bottom:28px;font-size:22px;color:#9aa0d0;opacity:0;transition:opacity .2s}
+  #typing.show{opacity:1}
+  #typing b{color:var(--accent);font-size:34px;margin-left:8px}
+  #toast{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:14px 26px;border-radius:14px;
+    background:rgba(0,0,0,.8);font-size:30px;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap}
+  #toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div id="stage">
+<div id="left">
+  <div class="title">
+    <h1><span>B</span><span>I</span><span>N</span><span>G</span><span>O</span></h1>
+    <div class="count"><b id="cnt">0</b>個目 / 75</div>
+  </div>
+  <div id="current">
+    <div id="curLetter">?</div>
+    <div id="curNum" class="empty">READY</div>
+    <div id="toast"></div>
+  </div>
+  <div id="history"><div class="lbl">履歴</div></div>
+  <div id="board"></div>
+  <div id="typing">入力中:<b id="buf"></b></div>
+</div>
+<div id="right"></div>
+</div>
+
+<script>
+const MAX = 75;
+const LETTERS = ["B","I","N","G","O"];
+const COLORS = {B:"var(--B)",I:"var(--I)",N:"var(--N)",G:"var(--G)",O:"var(--O)"};
+const KEY = "obs-bingo-v1";
+let drawn = [];   // 出た順
+let buf = "";
+let resetArmed = 0;
+
+const letterOf = n => LETTERS[Math.floor((n-1)/15)];
+
+// ---- 保存（OBSのリロードでも消えないように） ----
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(drawn)); }catch(e){} }
+function load(){
+  try{ const v = JSON.parse(localStorage.getItem(KEY)||"[]");
+       if(Array.isArray(v)) drawn = v.filter(n=>Number.isInteger(n)&&n>=1&&n<=MAX); }catch(e){}
+}
+
+// ---- 盤面生成 ----
+const board = document.getElementById("board");
+LETTERS.forEach((L,r)=>{
+  const lb = document.createElement("div");
+  lb.className="rowlbl"; lb.textContent=L; lb.style.background=COLORS[L];
+  board.appendChild(lb);
+  for(let c=1;c<=15;c++){
+    const n = r*15+c, d = document.createElement("div");
+    d.className="cell"; d.id="c"+n; d.textContent=n;
+    d.onclick=()=> drawn.includes(n) ? removeNum(n) : addNum(n);
+    board.appendChild(d);
+  }
+});
+
+function render(animate){
+  const last = drawn[drawn.length-1];
+  document.getElementById("cnt").textContent = drawn.length;
+  for(let n=1;n<=MAX;n++){
+    const el=document.getElementById("c"+n);
+    el.classList.toggle("on", drawn.includes(n));
+    el.classList.toggle("last", n===last);
+  }
+  const ln=document.getElementById("curLetter"), cn=document.getElementById("curNum");
+  if(last){
+    const L=letterOf(last);
+    ln.textContent=L; ln.style.background=COLORS[L];
+    cn.textContent=last; cn.classList.remove("empty");
+  }else{
+    ln.textContent="?"; ln.style.background="var(--dim)";
+    cn.textContent="READY"; cn.classList.add("empty");
+  }
+  if(animate){ [ln,cn].forEach(e=>{e.classList.remove("pop"); void e.offsetWidth; e.classList.add("pop");}); }
+  const h=document.getElementById("history");
+  h.querySelectorAll(".h").forEach(e=>e.remove());
+  drawn.slice(0,-1).slice(-8).reverse().forEach(n=>{
+    const d=document.createElement("div"); d.className="h"; d.textContent=n;
+    d.style.borderColor=COLORS[letterOf(n)]; h.appendChild(d);
+  });
+}
+
+function toast(msg){
+  const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show"),1400);
+}
+function addNum(n){
+  if(!(n>=1&&n<=MAX)){ toast(`1〜${MAX}で入力してね`); return; }
+  if(drawn.includes(n)){ toast(`${n} はもう出ています`); return; }
+  drawn.push(n); save(); render(true);
+}
+function removeNum(n){ drawn=drawn.filter(x=>x!==n); save(); render(false); }
+function showBuf(){
+  document.getElementById("buf").textContent=buf;
+  document.getElementById("typing").classList.toggle("show", buf.length>0);
+}
+
+// ---- キー操作 ----
+document.addEventListener("keydown",e=>{
+  if(/^[0-9]$/.test(e.key)){ if(buf.length<2){ buf+=e.key; showBuf(); } return; }
+  if(e.key==="Enter"){ if(buf){ addNum(parseInt(buf,10)); buf=""; showBuf(); } return; }
+  if(e.key==="Escape"){ buf=""; showBuf(); return; }
+  if(e.key==="Backspace"){
+    e.preventDefault();
+    if(buf){ buf=buf.slice(0,-1); showBuf(); }
+    else if(drawn.length){ const n=drawn.pop(); save(); render(false); toast(`${n} を取り消しました`); }
+    return;
+  }
+  if(e.key==="R" && e.shiftKey){
+    const now=Date.now();
+    if(now-resetArmed<2500){ drawn=[]; save(); render(false); toast("リセットしました"); resetArmed=0; }
+    else{ resetArmed=now; toast("もう一度 Shift+R でリセット"); }
+  }
+});
+
+// ---- ブラウザで試すとき用：?cam=1 で右側にカメラを表示 ----
+if(new URLSearchParams(location.search).has("cam") && navigator.mediaDevices){
+  navigator.mediaDevices.getUserMedia({video:{width:1920,height:1080},audio:false}).then(s=>{
+    const v=document.createElement("video"); v.autoplay=true; v.muted=true; v.playsInline=true; v.srcObject=s;
+    document.getElementById("right").appendChild(v);
+  }).catch(()=>toast("カメラを開けませんでした"));
+}
+
+// ---- どの画面サイズでも1920×1080の比率で全体を収める ----
+function fit(){
+  const s=Math.min(innerWidth/1920, innerHeight/1080);
+  document.getElementById("stage").style.transform=`scale(${s})`;
+}
+addEventListener("resize",fit); fit();
+
+load(); render(false);
+</script>
+</body>
+</html>
